@@ -3,4 +3,3 @@ httpx==0.27.2
 apscheduler==3.10.4
 libsql-experimental==0.0.55
 python-dotenv==1.0.1
-hdate==0.10.6
