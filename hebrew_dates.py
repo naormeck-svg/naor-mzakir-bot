@@ -1,6 +1,10 @@
 """Resolve Hebrew calendar phrases to ISO date strings."""
-from datetime import date, timedelta
+from datetime import datetime, date, timedelta
+from zoneinfo import ZoneInfo
 import re
+
+_TZ = ZoneInfo("Asia/Jerusalem")
+def _today(): return datetime.now(_TZ).date()
 
 try:
     import hdate
@@ -15,7 +19,7 @@ HOLIDAY_APPROX = {"ראש השנה": (9, 25), "יום כיפור": (10, 4), "ס�
                    "שמחת תורה": (10, 16), "חנוכה": (12, 25), "פורים": (3, 13), "פסח": (4, 12), "שבועות": (6, 1)}
 
 def _next_weekday(target_dow):
-    today = date.today()
+    today = _today()
     days_ahead = (target_dow - today.weekday()) % 7
     return today + timedelta(days=days_ahead or 7)
 
@@ -25,9 +29,9 @@ def _next_sunday(): return _next_weekday(6)
 
 def resolve_relative_date(text):
     text_lower = text.lower()
-    if "היום" in text_lower or "today" in text_lower: return date.today().isoformat()
-    if "מחר" in text_lower or "tomorrow" in text_lower: return (date.today() + timedelta(days=1)).isoformat()
-    if "מחרתיים" in text_lower: return (date.today() + timedelta(days=2)).isoformat()
+    if "היום" in text_lower or "today" in text_lower: return _today().isoformat()
+    if "מחר" in text_lower or "tomorrow" in text_lower: return (_today() + timedelta(days=1)).isoformat()
+    if "מחרתיים" in text_lower: return (_today() + timedelta(days=2)).isoformat()
     if "אחרי שבת" in text_lower: return (_next_saturday() + timedelta(days=1)).isoformat()
     if "לפני שבת" in text_lower: return _next_friday().isoformat()
     if "בשבת" in text_lower or "שבת הקרובה" in text_lower: return _next_saturday().isoformat()
@@ -35,13 +39,13 @@ def resolve_relative_date(text):
     for heb, dow in DOW_MAP.items():
         if heb in text_lower: return _next_weekday(dow).isoformat()
     m = re.search(r"בעוד\s+(\d+)\s+ימים", text_lower)
-    if m: return (date.today() + timedelta(days=int(m.group(1)))).isoformat()
-    if "בעוד שבוע" in text_lower: return (date.today() + timedelta(weeks=1)).isoformat()
-    if "בעוד חודש" in text_lower: return (date.today() + timedelta(days=30)).isoformat()
+    if m: return (_today() + timedelta(days=int(m.group(1)))).isoformat()
+    if "בעוד שבוע" in text_lower: return (_today() + timedelta(weeks=1)).isoformat()
+    if "בעוד חודש" in text_lower: return (_today() + timedelta(days=30)).isoformat()
     return _resolve_holiday_approx(text_lower)
 
 def _resolve_holiday_approx(text):
-    today = date.today()
+    today = _today()
     for holiday, (month, day) in HOLIDAY_APPROX.items():
         if holiday in text:
             candidate = date(today.year, month, day)
@@ -50,7 +54,7 @@ def _resolve_holiday_approx(text):
     return None
 
 def enrich_prompt_with_date_context():
-    today = date.today()
+    today = _today()
     weekday_names = ["שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת", "ראשון"]
     weekday_heb = weekday_names[today.weekday()]
     return (
