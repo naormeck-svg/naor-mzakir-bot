@@ -4,7 +4,12 @@ All Telegram bot handlers.
 import io
 import csv
 import logging
-from datetime import date, timedelta
+from datetime import datetime, date, timedelta
+from zoneinfo import ZoneInfo
+
+_TZ = ZoneInfo("Asia/Jerusalem")
+def _now(): return datetime.now(_TZ)
+def _today(): return datetime.now(_TZ).date()
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 import llm
@@ -42,12 +47,10 @@ def main_keyboard():
     ])
 
 def save_confirm_keyboard(item_id, type_):
-    type_label = {"task": "✅ משימה", "note": "📝 הערה", "reminder": "⏰ תזכורת"}.get(type_, type_)
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton(f"נשמר כ{type_label} ✓", callback_data=f"saved:{item_id}")],
         [
-            InlineKeyboardButton("🗑 מחק", callback_data=f"delete:{item_id}"),
-            InlineKeyboardButton("📋 כל המשימות", callback_data="cmd:list"),
+            InlineKeyboardButton("🗑 בטל", callback_data=f"delete:{item_id}"),
+            InlineKeyboardButton("📋 רשימה", callback_data="cmd:list"),
         ],
     ])
 
@@ -139,7 +142,7 @@ async def today_cmd(update, context):
     if not items:
         await update.effective_message.reply_text("אין פריטים להיום ✨", reply_markup=main_keyboard())
         return
-    text = f"📅 *היום — {date.today().strftime('%d/%m/%Y')}:*\n\n"
+    text = f"📅 *היום — {_today().strftime('%d/%m/%Y')}:*\n\n"
     for row in items:
         emoji = {"task": "☐", "note": "📝", "reminder": "⏰"}.get(row[2], "•")
         time_str = f" {row[5]}" if row[5] else ""
@@ -174,15 +177,23 @@ async def focus_cmd(update, context):
     chat_id = update.effective_chat.id
     today_items = db.get_today_items(chat_id)
     all_tasks = db.get_items(chat_id, type_="task", done=0)
-    focus_item = None
-    if today_items:
-        focus_item = today_items[0][3]
-    elif all_tasks:
-        focus_item = all_tasks[0][3]
-    if focus_item:
-        text = f"🎯 *מיקוד היום:*\n\n_{focus_item}_\n\nהתמקד במשימה הזאת עכשיו."
-    else:
+    top_today = today_items[:3]
+    today_ids = {r[0] for r in today_items}
+    upcoming = [t for t in all_tasks if t[0] not in today_ids][:3]
+    if not top_today and not upcoming:
         text = "🎯 אין משימות פתוחות — יום פנוי! ✨"
+    else:
+        text = "🎯 *מיקוד:*\n\n"
+        if top_today:
+            text += "*היום:*\n"
+            for item in top_today:
+                time_str = f" {item[5]}" if item[5] else ""
+                text += f"• {item[3]}{time_str}\n"
+        if upcoming:
+            text += "\n*בקרוב:*\n"
+            for item in upcoming:
+                date_str = f" ({item[4]})" if item[4] else ""
+                text += f"• {item[3]}{date_str}\n"
     await update.effective_message.reply_text(text, parse_mode="Markdown", reply_markup=main_keyboard())
 
 async def focusblock_cmd(update, context):
@@ -297,16 +308,39 @@ async def _process_content(update, chat_id, text, voice_text=None, context=None)
     recurring = result.get("recurring")
 
     if msg_type == "chat":
-        try:
-            reply = await llm.chat(text)
-        except Exception as e:
-            logger.error(f"Chat error: {e}")
-            reply = "לא הצלחתי לענות, נסה שוב."
+        data_keywords = ["משימות", "תזכורות", "היום", "כמה", "יש לי", "הערות", "פתוחות", "רשימה", "מה יש"]
+        if any(kw in text for kw in data_keywords):
+            tasks = db.get_items(chat_id, type_="task", done=0)
+            reminders = db.get_items(chat_id, type_="reminder", done=0)
+            notes = db.get_items(chat_id, type_="note", done=0)
+            today_items = db.get_today_items(chat_id)
+            summary = (
+                f"משימות פתוחות ({len(tasks)}): {', '.join(r[3][:30] for r in tasks[:8])}\n"
+                f"תזכורות פעילות ({len(reminders)}): {', '.join(r[3][:30] for r in reminders[:5])}\n"
+                f"הערות ({len(notes)}): {', '.join(r[3][:30] for r in notes[:5])}\n"
+                f"היום ({len(today_items)}): {', '.join(r[3][:30] for r in today_items[:5])}"
+            )
+            try:
+                reply = await llm.chat_with_context(text, summary)
+            except Exception as e:
+                logger.error(f"Chat error: {e}")
+                reply = "לא הצלחתי לענות, נסה שוב."
+        else:
+            try:
+                reply = await llm.chat(text)
+            except Exception as e:
+                logger.error(f"Chat error: {e}")
+                reply = "לא הצלחתי לענות, נסה שוב."
         await update.message.reply_text(reply, reply_markup=main_keyboard())
         return
 
     # Ask for timing with 3 smart suggestions
-    if msg_type in ("task", "reminder") and (not due_date or (msg_type == "reminder" and not due_time)):
+    # Auto-set today for tasks if time was given but no date
+    if msg_type == "task" and due_time and not due_date:
+        due_date = _today().isoformat()
+
+    # Show picker: task needs a date; reminder needs both date and time
+    if (msg_type == "task" and not due_date) or (msg_type == "reminder" and not due_date and not due_time):
         if context is not None:
             context.user_data["pending"] = {
                 "type": msg_type, "content": content,
@@ -330,7 +364,6 @@ async def _process_content(update, chat_id, text, voice_text=None, context=None)
 async def _save_and_confirm(update, chat_id, msg_type, content, due_date, due_time, recurring, voice_text=None):
     item_id = db.save_item(chat_id, msg_type, content, due_date, due_time, recurring)
     emoji = {"task": "✅", "note": "📝", "reminder": "⏰"}.get(msg_type, "💾")
-    label = {"task": "משימה", "note": "הערה", "reminder": "תזכורת"}.get(msg_type, "פריט")
     details = ""
     if voice_text and voice_text != content:
         details += f"\n🎤 _{voice_text}_"
@@ -346,7 +379,7 @@ async def _save_and_confirm(update, chat_id, msg_type, content, due_date, due_ti
         details += f"\n🔄 {recurring_labels.get(recurring, recurring)}"
     reply_target = update.message or update.effective_message
     await reply_target.reply_text(
-        f"{emoji} נשמר כ*{label}*: {content}{details}",
+        f"{emoji} *{content}*{details}",
         parse_mode="Markdown",
         reply_markup=save_confirm_keyboard(item_id, msg_type),
     )
