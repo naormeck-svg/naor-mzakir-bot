@@ -1,5 +1,5 @@
 """
-LLM interface — all Groq API calls live here.
+LLM interface  all Groq API calls live here.
 """
 import json
 import base64
@@ -35,29 +35,29 @@ Rules:
 - "task": something to do with a deadline. Extract date/time if mentioned.
 - "reminder": something to remember at a specific time/date. Always has date or time.
 - "note": a thought, idea, or piece of information to save. No action required.
-- "chat": casual conversation, question, or greeting — do NOT save, just respond.
+- "chat": casual conversation, question, or greeting  do NOT save, just respond.
 - Handle Hebrew-English code-switching naturally.
 - Resolve relative dates using the date context below.
 - If recurring is detected, set the recurring field.
 - content should be clean, concise Hebrew (or mixed) text.
-- Infinitive phrases (לקרוא, לשלוח, לעשות, לבדוק, etc.) = task.
-- Past references ("שבוע שעבר", "אתמול", "לפני X ימים") = note, not recurring.
-- "ביום שני" when today is Monday means next Monday (שני הבא), not today.
-- recurring ONLY if explicit words: "כל יום", "כל שבוע", "every week", "weekly", "כל חודש".
+- Infinitive phrases (�����, �����, �����, �����, etc.) = task.
+- Past references ("���� ����", "�����", "���� X ����") = note, not recurring.
+- "���� ���" when today is Monday means next Monday (��� ���), not today.
+- recurring ONLY if explicit words: "�� ���", "�� ����", "every week", "weekly", "�� ����".
 
 {date_context}
 """
 
-CHAT_SYSTEM = """You are a friendly, concise Hebrew personal assistant bot named מזכיר.
+CHAT_SYSTEM = """You are a friendly, concise Hebrew personal assistant bot named �����.
 Respond in Hebrew. Be brief and helpful. Use Israeli conversational tone.
-Do not offer to save things — this is a pure chat response."""
+Do not offer to save things  this is a pure chat response."""
 
-CONTEXT_CHAT_SYSTEM = """אתה מזכיר עברי חכם ותמציתי.
-יש לך גישה לנתוני המשתמש:
+CONTEXT_CHAT_SYSTEM = """��� ����� ���� ��� �������.
+�� �� ���� ������ ������:
 {user_data}
 
-ענה על שאלת המשתמש בהתבסס על הנתונים האלו.
-תהיה קצר וישיר. אל תמציא מידע שלא קיים בנתונים."""
+��� �� ���� ������ ������ �� ������� ����.
+���� ��� �����. �� ����� ���� ��� ���� �������."""
 
 SUGGEST_TIMES_SYSTEM = """You are a scheduling assistant for a Hebrew Telegram bot.
 The user just added an item and needs to pick a time for it.
@@ -67,11 +67,11 @@ The user just added an item and needs to pick a time for it.
 CRITICAL RULES:
 1. ALL suggested dates and times MUST be strictly in the future (after right now).
 2. Never suggest a time that has already passed today.
-3. If the current time is after 20:00, do NOT suggest "הערב 20:00" — suggest tomorrow or later instead.
+3. If the current time is after 20:00, do NOT suggest "���� 20:00"  suggest tomorrow or later instead.
 4. Spread suggestions: one soon (within a few hours), one medium (tomorrow or next few days), one later (next week or further).
 5. Make labels contextually relevant to the item content.
 
-Return ONLY valid JSON — an array of exactly 3 objects:
+Return ONLY valid JSON  an array of exactly 3 objects:
 [
   {"label": "<short Hebrew label, max 4 words>", "date": "<YYYY-MM-DD>", "time": "<HH:MM>"},
   {"label": "<short Hebrew label, max 4 words>", "date": "<YYYY-MM-DD>", "time": "<HH:MM>"},
@@ -171,7 +171,7 @@ async def describe_image(image_bytes: bytes) -> str:
                 "messages": [{
                     "role": "user",
                     "content": [
-                        {"type": "text", "text": "תאר את התמונה הזאת בקצרה בעברית. אם יש טקסט — צטט אותו."},
+                        {"type": "text", "text": "��� �� ������ ���� ����� ������. �� �� ����  ��� ����."},
                         {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}},
                     ]
                 }],
@@ -237,16 +237,16 @@ def _fallback_suggestions() -> list:
     # "Soon" = next round hour, minimum 1 hour from now
     soon_dt = (now + timedelta(hours=1)).replace(minute=0, second=0, microsecond=0)
     if soon_dt.date() == now.date() and soon_dt.hour < 22:
-        soon = {"label": f"בעוד שעה ({soon_dt.strftime('%H:%M')})", "date": today, "time": soon_dt.strftime("%H:%M")}
+        soon = {"label": f"���� ��� ({soon_dt.strftime('%H:%M')})", "date": today, "time": soon_dt.strftime("%H:%M")}
     else:
-        soon = {"label": "מחר בבוקר 09:00", "date": tomorrow, "time": "09:00"}
+        soon = {"label": "��� ����� 09:00", "date": tomorrow, "time": "09:00"}
 
     # "Evening" = today 20:00, only if still future
     evening_dt = now.replace(hour=20, minute=0, second=0, microsecond=0)
     if evening_dt > now:
-        medium = {"label": "הערב 20:00", "date": today, "time": "20:00"}
+        medium = {"label": "���� 20:00", "date": today, "time": "20:00"}
     else:
-        medium = {"label": "מחר 09:00", "date": tomorrow, "time": "09:00"}
+        medium = {"label": "��� 09:00", "date": tomorrow, "time": "09:00"}
 
-    later = {"label": "שבוע הבא 09:00", "date": next_week, "time": "09:00"}
+    later = {"label": "���� ��� 09:00", "date": next_week, "time": "09:00"}
     return [soon, medium, later]
