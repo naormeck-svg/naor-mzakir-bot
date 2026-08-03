@@ -16,13 +16,13 @@ TIPS = [
     "💡 מינימליזם לא אומר לחיות עם פחות — אלא לחיות עם מה שחשוב.",
     "💡 רשימה של 3 משימות חשובות ביום עדיפה על רשימה של 20.",
     "💡 לפני שאתה מוסיף משימה — שאל: מה קורה אם לא תעשה את זה?",
-    "💡 ה\'לא\' שאתה אומר לדברים לא חשובים הוא ה\'כן\' שאתה אומר לדברים שחשובים.",
     "💡 עשה משימה אחת עד הסוף לפני שאתה מתחיל הבאה.",
-    "💡 תיבת הדואר הנכנס שלך היא רשימת העדיפויות של אחרים. שמור על שלך.",
     "💡 כבה התראות. הן עולות לך ביותר ממה שאתה חושב.",
     "💡 עשה את המשימה הקשה ביותר ראשונה בבוקר.",
+    "💡 תיבת הדואר הנכנס שלך היא רשימת העדיפויות של אחרים. שמור על שלך.",
     "💡 \'מחר\' הוא המקום שבו מתות רוב המשימות.",
     "💡 פחות עדיף — בחר עמוק על פני רחב.",
+    "💡 הפסקה של 5 דקות כל שעה מגדילה ריכוז — לא מקטינה.",
 ]
 _tip_index = 0
 
@@ -69,44 +69,16 @@ def task_list_keyboard(items):
     buttons.append([InlineKeyboardButton("🔙 חזור", callback_data="cmd:main")])
     return InlineKeyboardMarkup(buttons)
 
-def ask_date_keyboard():
-    today = date.today()
-    tomorrow = today + timedelta(days=1)
-    day_after = today + timedelta(days=2)
-    days_to_friday = (4 - today.weekday()) % 7 or 7
-    this_friday = today + timedelta(days=days_to_friday)
-    days_to_monday = (0 - today.weekday()) % 7 or 7
-    next_monday = today + timedelta(days=days_to_monday)
-    return InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton(f"📅 היום ({today.strftime('%d/%m')})", callback_data=f"setdate:{today.isoformat()}"),
-            InlineKeyboardButton(f"📅 מחר ({tomorrow.strftime('%d/%m')})", callback_data=f"setdate:{tomorrow.isoformat()}"),
-        ],
-        [
-            InlineKeyboardButton(f"📅 מחרתיים ({day_after.strftime('%d/%m')})", callback_data=f"setdate:{day_after.isoformat()}"),
-            InlineKeyboardButton(f"📅 שישי ({this_friday.strftime('%d/%m')})", callback_data=f"setdate:{this_friday.isoformat()}"),
-        ],
-        [
-            InlineKeyboardButton(f"📅 שבוע הבא ({next_monday.strftime('%d/%m')})", callback_data=f"setdate:{next_monday.isoformat()}"),
-            InlineKeyboardButton("⏭ ללא תאריך", callback_data="setdate:none"),
-        ],
-    ])
-
-def ask_time_keyboard():
-    return InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton("🌅 07:00", callback_data="settime:07:00"),
-            InlineKeyboardButton("☀️ 09:00", callback_data="settime:09:00"),
-        ],
-        [
-            InlineKeyboardButton("🕛 12:00", callback_data="settime:12:00"),
-            InlineKeyboardButton("🌆 17:00", callback_data="settime:17:00"),
-        ],
-        [
-            InlineKeyboardButton("🌙 20:00", callback_data="settime:20:00"),
-            InlineKeyboardButton("⏭ ללא שעה", callback_data="settime:none"),
-        ],
-    ])
+def smart_time_keyboard(suggestions: list):
+    """3 smart suggestion buttons, each combining date+time in one tap."""
+    buttons = []
+    for s in suggestions[:3]:
+        label = s.get("label", "?")
+        dt = s.get("date", "")
+        tm = s.get("time") or "none"
+        # callback: setdatetime:YYYY-MM-DD|HH:MM  (fits in 64 bytes)
+        buttons.append([InlineKeyboardButton(f"📅 {label}", callback_data=f"setdatetime:{dt}|{tm}")])
+    return InlineKeyboardMarkup(buttons)
 
 
 # ── Command handlers ───────────────────────────────────────────────────────────
@@ -328,30 +300,23 @@ async def _process_content(update, chat_id, text, voice_text=None, context=None)
         await update.message.reply_text(reply, reply_markup=main_keyboard())
         return
 
-    if msg_type in ("task", "reminder") and not due_date:
+    # Ask for timing with 3 smart suggestions
+    if msg_type in ("task", "reminder") and (not due_date or (msg_type == "reminder" and not due_time)):
         if context is not None:
             context.user_data["pending"] = {
                 "type": msg_type, "content": content,
-                "time": due_time, "recurring": recurring, "voice_text": voice_text,
+                "recurring": recurring, "voice_text": voice_text,
             }
         emoji = "✅" if msg_type == "task" else "⏰"
+        await update.message.reply_text("⏳ חושב על מועדים…")
+        try:
+            suggestions = await llm.suggest_times(content)
+        except Exception:
+            suggestions = llm._fallback_suggestions()
         await update.message.reply_text(
-            f"{emoji} *{content}*\n\nמתי?",
+            f"{emoji} *{content}*\n\nמתי להזכיר לך?",
             parse_mode="Markdown",
-            reply_markup=ask_date_keyboard(),
-        )
-        return
-
-    if msg_type == "reminder" and not due_time:
-        if context is not None:
-            context.user_data["pending"] = {
-                "type": msg_type, "content": content,
-                "date": due_date, "recurring": recurring, "voice_text": voice_text,
-            }
-        await update.message.reply_text(
-            f"⏰ *{content}*\n📅 {due_date}\n\nבאיזו שעה?",
-            parse_mode="Markdown",
-            reply_markup=ask_time_keyboard(),
+            reply_markup=smart_time_keyboard(suggestions),
         )
         return
 
@@ -403,49 +368,27 @@ async def handle_callback(update, context):
         return
     action, param = parts
 
-    if action == "setdate":
+    # Smart date+time selection (3 buttons flow)
+    if action == "setdatetime":
         pending = context.user_data.get("pending")
         if not pending:
             await query.edit_message_text("לא נמצא פריט ממתין.", reply_markup=main_keyboard())
             return
-        selected_date = None if param == "none" else param
-        pending["date"] = selected_date
-        if pending["type"] == "reminder":
-            context.user_data["pending"] = pending
-            date_str = f"\n📅 {selected_date}" if selected_date else ""
-            await query.edit_message_text(
-                f"⏰ *{pending['content']}*{date_str}\n\nבאיזו שעה?",
-                parse_mode="Markdown",
-                reply_markup=ask_time_keyboard(),
-            )
-        else:
-            item_id = db.save_item(chat_id, pending["type"], pending["content"],
-                                   selected_date, pending.get("time"), pending.get("recurring"))
-            context.user_data.pop("pending", None)
-            date_str = f"\n📅 {selected_date}" if selected_date else ""
-            await query.edit_message_text(
-                f"✅ נשמר כ*משימה*: {pending['content']}{date_str}",
-                parse_mode="Markdown",
-                reply_markup=save_confirm_keyboard(item_id, pending["type"]),
-            )
-        return
-
-    if action == "settime":
-        pending = context.user_data.get("pending")
-        if not pending:
-            await query.edit_message_text("לא נמצא פריט ממתין.", reply_markup=main_keyboard())
-            return
-        selected_time = None if param == "none" else param
+        dt_parts = param.split("|", 1)
+        selected_date = dt_parts[0] if dt_parts[0] else None
+        selected_time = dt_parts[1] if len(dt_parts) > 1 and dt_parts[1] != "none" else None
         item_id = db.save_item(chat_id, pending["type"], pending["content"],
-                               pending.get("date"), selected_time, pending.get("recurring"))
+                               selected_date, selected_time, pending.get("recurring"))
         context.user_data.pop("pending", None)
+        emoji = "✅" if pending["type"] == "task" else "⏰"
+        label = "משימה" if pending["type"] == "task" else "תזכורת"
         details = ""
-        if pending.get("date"):
-            details += f"\n📅 {pending['date']}"
+        if selected_date:
+            details += f"\n📅 {selected_date}"
         if selected_time:
             details += f" ⏰ {selected_time}"
         await query.edit_message_text(
-            f"⏰ נשמר כ*תזכורת*: {pending['content']}{details}",
+            f"{emoji} נשמר כ*{label}*: {pending['content']}{details}",
             parse_mode="Markdown",
             reply_markup=save_confirm_keyboard(item_id, pending["type"]),
         )
