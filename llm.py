@@ -5,6 +5,11 @@ import json
 import base64
 import httpx
 from datetime import datetime, date, timedelta
+from zoneinfo import ZoneInfo
+
+_TZ = ZoneInfo("Asia/Jerusalem")
+def _now(): return datetime.now(_TZ)
+def _today(): return datetime.now(_TZ).date()
 from config import GROQ_API_KEY, GROQ_MODEL, GROQ_VISION_MODEL, WHISPER_MODEL
 from hebrew_dates import enrich_prompt_with_date_context
 
@@ -35,6 +40,10 @@ Rules:
 - Resolve relative dates using the date context below.
 - If recurring is detected, set the recurring field.
 - content should be clean, concise Hebrew (or mixed) text.
+- Infinitive phrases (לקרוא, לשלוח, לעשות, לבדוק, etc.) = task.
+- Past references ("שבוע שעבר", "אתמול", "לפני X ימים") = note, not recurring.
+- "ביום שני" when today is Monday means next Monday (שני הבא), not today.
+- recurring ONLY if explicit words: "כל יום", "כל שבוע", "every week", "weekly", "כל חודש".
 
 {date_context}
 """
@@ -42,6 +51,13 @@ Rules:
 CHAT_SYSTEM = """You are a friendly, concise Hebrew personal assistant bot named מזכיר.
 Respond in Hebrew. Be brief and helpful. Use Israeli conversational tone.
 Do not offer to save things — this is a pure chat response."""
+
+CONTEXT_CHAT_SYSTEM = """אתה מזכיר עברי חכם ותמציתי.
+יש לך גישה לנתוני המשתמש:
+{user_data}
+
+ענה על שאלת המשתמש בהתבסס על הנתונים האלו.
+תהיה קצר וישיר. אל תמציא מידע שלא קיים בנתונים."""
 
 SUGGEST_TIMES_SYSTEM = """You are a scheduling assistant for a Hebrew Telegram bot.
 The user just added an item and needs to pick a time for it.
@@ -112,6 +128,25 @@ async def chat(text: str, history: list = None) -> str:
         resp.raise_for_status()
         return resp.json()["choices"][0]["message"]["content"].strip()
 
+
+async def chat_with_context(text: str, user_data_summary: str) -> str:
+    system = CONTEXT_CHAT_SYSTEM.format(user_data=user_data_summary)
+    async with httpx.AsyncClient(timeout=15) as client:
+        resp = await client.post(
+            f"{GROQ_BASE}/chat/completions",
+            headers=HEADERS,
+            json={
+                "model": GROQ_MODEL,
+                "messages": [
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": text},
+                ],
+                "temperature": 0.5,
+                "max_tokens": 300,
+            }
+        )
+        resp.raise_for_status()
+        return resp.json()["choices"][0]["message"]["content"].strip()
 
 async def transcribe(audio_bytes: bytes, filename: str = "audio.ogg") -> str:
     async with httpx.AsyncClient(timeout=30) as client:
