@@ -18,39 +18,39 @@ import db
 logger = logging.getLogger(__name__)
 
 TIPS = [
-    "ð¡ ××× ×××××× ×× ××××¨ ×××××ª ×¢× ×¤×××ª â ××× ×××××ª ×¢× ×× ×©××©××.",
-    "ð¡ ×¨×©××× ×©× 3 ××©××××ª ××©××××ª ×××× ×¢×××¤× ×¢× ×¨×©××× ×©× 20.",
-    "ð¡ ×Ç¤× × ×©××ª× ×××¡××£ ××©××× â ×©××: ×× ×§××¨× ×× ×× ×ª×¢×©× ××ª ××?",
-    "ð¡ ×¢×©× ××©××× ×××ª ×¢× ××¡××£ ××¤× × ×©××ª× ××ª××× ××××.",
-    "ð¡ ××× ××ª×¨×××ª. ×× ×¢××××ª ×× ××××ª×¨ ××× ×©××ª× ×××©×.",
-    "ð¡ ×¢×©× ××ª ×××©××× ××§×©× ××××ª×¨ ×©×××× × ××××§×¨.",
-    "ð¡ ×ª×××ª ×××××¨ ×× ×× ×¡ ×©×× ××× ×¨×©×××ª ××¢×××¤××××ª ×©× ×××¨××. ×©×××  ×¢× ×©××.",
-    "ð¡ '×××¨' ××× ×××§×× ×©×× ××ª××ª ×¨×× ×××©××××ª.",
-    "ð¡ ×¤×××ª ×¢×××£ â ×××¨ ×¢×××§ ×¢× ×¤× × ×©××.",
-    "ð¡ ××¤×¡×§× ×©× 5 ××§××ª ×× ×©×¢× ×××××× ×©×××× â ×× ××§××× ×.",
+    "💡 מינימליזם לא אומר לחיות עם פחות — אלא לחיות עם מה שחשוב.",
+    "💡 רשימה של 3 משימות חשובות ביום עדיפה על רשימה של 20.",
+    "💡 לǤני שאתה מוסיף משימה — שאל: מה קורה אם לא תעשה את זה?",
+    "💡 עשה משימה אחת עד הסוף לפני שאתה מתחיל הבאה.",
+    "💡 כבה התראות. הן עולות לך ביותר ממה שאתה חושב.",
+    "💡 עשה את המשימה הקשה ביותר שאוונה בבוקר.",
+    "💡 תיבת הדואר הנכנס שלך היא רשימת העדיפויות של אחרים. שמונ על שלך.",
+    "💡 'מחר' הוא המקום שבו מתות רוב המשימות.",
+    "💡 פחות עדיף — בחר עמוק על פני שחב.",
+    "💡 הפסקה של 5 דקות כל שעה מגדילה שיכוז — לא מקטינה.",
 ]
 _tip_index = 0
 
 
-# ââ Keyboards ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+# ── Keyboards ──────────────────────────────────────────────────────────────────
 
 def main_keyboard():
     return InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("ð ××©××××ª", callback_data="cmd:list"),
-            InlineKeyboardButton("ð ××××", callback_data="cmd:today"),
+            InlineKeyboardButton("📋 משימות", callback_data="cmd:list"),
+            InlineKeyboardButton("📅 היום", callback_data="cmd:today"),
         ],
         [
-            InlineKeyboardButton("ð¤ ×××¦××", callback_data="cmd:export"),
-            InlineKeyboardButton("â ×¢××¨×", callback_data="cmd:help"),
+            InlineKeyboardButton("📤 ייצוא", callback_data="cmd:export"),
+            InlineKeyboardButton("❓ עזרה", callback_data="cmd:help"),
         ],
     ])
 
 def save_confirm_keyboard(item_id, type_):
     return InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("ð ×××", callback_data=f"delete:{item_id}"),
-            InlineKeyboardButton("ð ×¨×©×××", callback_data="cmd:list"),
+            InlineKeyboardButton("🗑 בטל", callback_data=f"delete:{item_id}"),
+            InlineKeyboardButton("📋 רשימה", callback_data="cmd:list"),
         ],
     ])
 
@@ -58,9 +58,9 @@ def task_list_keyboard(items):
     buttons = []
     for row in items:
         item_id = row[0]
-        content = row[3][:30] + ("â¦" if len(row[3]) > 30 else "")
-        buttons.append([InlineKeyboardButton(f"â {content}", callback_data=f"done:{item_id}")])
-    buttons.append([InlineKeyboardButton("ð ××××¨", callback_data="cmd:main")])
+        content = row[3][:30] + ("…" if len(row[3]) > 30 else "")
+        buttons.append([InlineKeyboardButton(f"✅ {content}", callback_data=f"done:{item_id}")])
+    buttons.append([InlineKeyboardButton("🔙 חזור", callback_data="cmd:main")])
     return InlineKeyboardMarkup(buttons)
 
 def smart_time_keyboard(suggestions: list):
@@ -70,7 +70,7 @@ def smart_time_keyboard(suggestions: list):
         label = s.get("label", "?")
         dt = s.get("date", "")
         tm = s.get("time") or "none"
-        buttons.append([InlineKeyboardButton(f"ð {label}", callback_data=f"setdatetime:{dt}|{tm}")])
+        buttons.append([InlineKeyboardButton(f"📅 {label}", callback_data=f"setdatetime:{dt}|{tm}")])
     return InlineKeyboardMarkup(buttons)
 
 def reschedule_keyboard(item_id: int, suggestions: list):
@@ -81,70 +81,70 @@ def reschedule_keyboard(item_id: int, suggestions: list):
         dt = s.get("date", "")
         tm = s.get("time") or "none"
         # callback: reschedule:ID|YYYY-MM-DD|HH:MM  (fits in 64 bytes for typical IDs)
-        buttons.append([InlineKeyboardButton(f"ð {label}", callback_data=f"reschedule:{item_id}|{dt}|{tm}")])
+        buttons.append([InlineKeyboardButton(f"📅 {label}", callback_data=f"reschedule:{item_id}|{dt}|{tm}")])
     buttons.append([
-        InlineKeyboardButton("â ×××¦×¢", callback_data=f"done:{item_id}"),
-        InlineKeyboardButton("ð ×××××", callback_data=f"cancel_item:{item_id}"),
+        InlineKeyboardButton("✅ בוצע", callback_data=f"done:{item_id}"),
+        InlineKeyboardButton("🗑 ביטול", callback_data=f"cancel_item:{item_id}"),
     ])
     return InlineKeyboardMarkup(buttons)
 
 
-# ââ Command handlers âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+# ── Command handlers ───────────────────────────────────────────────────────────
 
 async def start(update, context):
     await update.message.reply_text(
-        "×©×××! ×× × ××××××¨ ×©×× ð¤\n\n"
-        "×©×× ×× ×§××, ××§×¡× ×× ×ª××× × â ××©×××¨ ××× ××××.\n"
-        "×× ×¦×¨×× ×××§×© ××× × ××©×××¨, ×× ×§××¨× ××××××××ª.",
+        "שלום! אני המזכיר שלך 🤖\n\n"
+        "שלח לי קול, טקסט או תמונה — אשמור הכל מייד.\n"
+        "לא צריך לבקש ממני לשמור, זה קורה אוטומטית.",
         reply_markup=main_keyboard(),
     )
 
 async def help_cmd(update, context):
     await update.effective_message.reply_text(
-        "×× ×× × ×××× ××¢×©××ª:\n\n"
-        "ð¤ *×§××* â ××××¨ ×××¡××× ××××××××ª\n"
-        "ð¬ *××§×¡×* â ×××ª× ×××¨\n"
-        "ð¼ *×ª××× ×* â ×ª××××¨ ××©×××¨×\n\n"
-        "×¤×§××××ª:\n"
-        "/list â ××©××××ª ×¤×ª××××ª\n"
-        "/today â ××©××××ª ×××××\n"
-        "/notes â ××¢×¨××ª ×©×××¨××ª\n"
-        "/reminders â ×ª××××¨××ª ×¤×¢××××ª\n"
-        "/focus â ××××§×× ×©× ××××\n"
-        "/focusblock â ××××§ ×¢×××× ××××§××ª\n"
-        "/history â ×× ×©×××¦×¢\n"
-        "/tip â ×××¤ ××× ××××××\n"
-        "/export â ×××¦×× ×-CSV\n"
-        "/menu â ×ª×¤×¨×× ××¤×ª××¨××",
+        "מה אני יכול לעשות:\n\n"
+        "🎤 *קול* — אוגר ומסווג אוטומטית\n"
+        "💬 *טקסט* — אותו דבר\n"
+        "🖼 *תמונה* — תיאור ושמירה\n\n"
+        "פקודות:\n"
+        "/list — משימות פתוחות\n"
+        "/today — משימות להיום\n"
+        "/notes — הערות שמורות\n"
+        "/reminders — תזכורות פעילות\n"
+        "/focus — המיקוד של היום\n"
+        "/focusblock — בלוק עבודה ממוקדת\n"
+        "/history — מה שבוצע\n"
+        "/tip — טיפ מינימליזם\n"
+        "/export — ייצוא ל-CSV\n"
+        "/menu — תפריט כפתורים",
         parse_mode="Markdown",
         reply_markup=main_keyboard(),
     )
 
 async def menu_cmd(update, context):
-    await update.effective_message.reply_text("×ª×¤×¨××:", reply_markup=main_keyboard())
+    await update.effective_message.reply_text("תפריט:", reply_markup=main_keyboard())
 
 async def list_cmd(update, context):
     chat_id = update.effective_chat.id
     items = db.get_items(chat_id, type_="task", done=0)
     if not items:
-        await update.effective_message.reply_text("××× ××©××××ª ×¤×ª××××ª ð", reply_markup=main_keyboard())
+        await update.effective_message.reply_text("אין משימות פתוחות 🎉", reply_markup=main_keyboard())
         return
-    text = "ð *××©××××ª ×¤×ª××××ª:*\n\n"
+    text = "📋 *משימות פתוחות:*\n\n"
     for row in items:
         content = row[3]
-        due = f" â {row[4]}" if row[4] else ""
-        text += f"â¢ {content}{due}\n"
+        due = f" — {row[4]}" if row[4] else ""
+        text += f"• {content}{due}\n"
     await update.effective_message.reply_text(text, parse_mode="Markdown", reply_markup=task_list_keyboard(items))
 
 async def today_cmd(update, context):
     chat_id = update.effective_chat.id
     items = db.get_today_items(chat_id)
     if not items:
-        await update.effective_message.reply_text("××× ×¤×¨×××× ××××× â¨", reply_markup=main_keyboard())
+        await update.effective_message.reply_text("אין פריטים להיום ✨", reply_markup=main_keyboard())
         return
-    text = f"ð *×××× â {_today().strftime('%d/%m/%Y')}:*\n\n"
+    text = f"📅 *היום — {_today().strftime('%d/%m/%Y')}:*\n\n"
     for row in items:
-        emoji = {"task": "â", "note": "ð", "reminder": "â°"}.get(row[2], "â¢")
+        emoji = {"task": "☐", "note": "📝", "reminder": "⏰"}.get(row[2], "•")
         time_str = f" {row[5]}" if row[5] else ""
         text += f"{emoji} {row[3]}{time_str}\n"
     await update.effective_message.reply_text(text, parse_mode="Markdown", reply_markup=task_list_keyboard(items))
@@ -153,24 +153,24 @@ async def notes_cmd(update, context):
     chat_id = update.effective_chat.id
     items = db.get_items(chat_id, type_="note", done=0)
     if not items:
-        await update.effective_message.reply_text("××× ××¢×¨××ª ×©×××¨××ª.", reply_markup=main_keyboard())
+        await update.effective_message.reply_text("אין הערות שמורות.", reply_markup=main_keyboard())
         return
-    text = "ð *××¢×¨××ª ×©×××¨××ª:*\n\n"
+    text = "📝 *הערות שמורות:*\n\n"
     for row in items:
-        text += f"â¢ {row[3]}\n"
+        text += f"• {row[3]}\n"
     await update.effective_message.reply_text(text, parse_mode="Markdown", reply_markup=main_keyboard())
 
 async def reminders_cmd(update, context):
     chat_id = update.effective_chat.id
     items = db.get_items(chat_id, type_="reminder", done=0)
     if not items:
-        await update.effective_message.reply_text("××× ×ª××××¨××ª ×¤×¢××××ª.", reply_markup=main_keyboard())
+        await update.effective_message.reply_text("אין תזכורות פעילות.", reply_markup=main_keyboard())
         return
-    text = "â° *×ª××××¨××ª ×¤×¢××××ª:*\n\n"
+    text = "⏰ *תזכורות פעילות:*\n\n"
     for row in items:
         date_str = f" {row[4]}" if row[4] else ""
         time_str = f" {row[5]}" if row[5] else ""
-        text += f"â¢ {row[3]}{date_str}{time_str}\n"
+        text += f"• {row[3]}{date_str}{time_str}\n"
     await update.effective_message.reply_text(text, parse_mode="Markdown", reply_markup=main_keyboard())
 
 async def focus_cmd(update, context):
@@ -181,28 +181,28 @@ async def focus_cmd(update, context):
     today_ids = {r[0] for r in today_items}
     upcoming = [t for t in all_tasks if t[0] not in today_ids][:3]
     if not top_today and not upcoming:
-        text = "ð¯ ××× ××©××××ª ×¤×ª××××ª â ××× ×¤× ××! â¨"
+        text = "🎯 אין משימות פתוחות — יום פנוי! ✨"
     else:
-        text = "ð¯ *×××§××:*\n\n"
+        text = "🎯 *מיקוד:*\n\n"
         if top_today:
-            text += "*××××:*\n"
+            text += "*היום:*\n"
             for item in top_today:
                 time_str = f" {item[5]}" if item[5] else ""
-                text += f"â¢ {item[3]}{time_str}\n"
+                text += f"• {item[3]}{time_str}\n"
         if upcoming:
-            text += "\n*××§×¨××:*\n"
+            text += "\n*בקרוב:*\n"
             for item in upcoming:
                 date_str = f" ({item[4]})" if item[4] else ""
-                text += f"â¢ {item[3]}{date_str}\n"
+                text += f"• {item[3]}{date_str}\n"
     await update.effective_message.reply_text(text, parse_mode="Markdown", reply_markup=main_keyboard())
 
 async def focusblock_cmd(update, context):
     text = (
-        "ð *××××§ ×××§×× â 25 ××§××ª*\n\n"
-        "××× ××ª×¨×××ª. ×¡×××¨ ××××× ××××ª×¨××.\n"
-        "×××¨ ××©××× ×××ª â ××¢×©× ×©×§ ×××ª×.\n\n"
-        "â± × ×¤××©×× ××¢×× 25 ××§××ª.\n\n"
-        "_××¤××§××¡ ×©×× = ×××× ×©××._"
+        "🔒 *בלוק מיקוד — 25 דקות*\n\n"
+        "כבה התראות. סגור טאבים מיותרים.\n"
+        "בחר משימה אחת — ועשה שק אותה.\n\n"
+        "⏱ נפגשים בעוד 25 דקות.\n\n"
+        "_הפוקוס שלך = הכוח שלך._"
     )
     await update.effective_message.reply_text(text, parse_mode="Markdown", reply_markup=main_keyboard())
 
@@ -216,12 +216,12 @@ async def history_cmd(update, context):
     chat_id = update.effective_chat.id
     items = db.get_items(chat_id, done=1)
     if not items:
-        await update.effective_message.reply_text("××× ×××¡×××¨×× ×¢××××.", reply_markup=main_keyboard())
+        await update.effective_message.reply_text("אין היסטוריה עדיין.", reply_markup=main_keyboard())
         return
     recent = list(items)[-20:]
-    text = "â *×××¦×¢ ××××¨×× ×:*\n\n"
+    text = "✅ *בוצע לאחרונה:*\n\n"
     for row in recent:
-        emoji = {"task": "â", "note": "ð", "reminder": "â°"}.get(row[2], "â¢")
+        emoji = {"task": "✅", "note": "📝", "reminder": "⏰"}.get(row[2], "•")
         text += f"{emoji} {row[3]}\n"
     await update.effective_message.reply_text(text, parse_mode="Markdown", reply_markup=main_keyboard())
 
@@ -229,34 +229,34 @@ async def export_cmd(update, context):
     chat_id = update.effective_chat.id
     rows = db.export_all(chat_id)
     if not rows:
-        await update.effective_message.reply_text("××× × ×ª×× ×× ××××¦×× ×¢××××.", reply_markup=main_keyboard())
+        await update.effective_message.reply_text("אין נתונים לייצוא עדיין.", reply_markup=main_keyboard())
         return
     buf = io.StringIO()
-    buf.write("ï»¿")
+    buf.write("﻿")
     writer = csv.writer(buf)
-    writer.writerow(["ID", "×¡××", "×ª×××", "×ª××¨××", "×©×¢×", "××××¨", "×××¦×¢", "× ××¦×¨"])
+    writer.writerow(["ID", "סוג", "תוכן", "תאריך", "שעה", "חוזר", "בוצע", "נוצר"])
     for row in rows:
-        done_str = "××" if row[6] else "××"
+        done_str = "כן" if row[6] else "לא"
         writer.writerow([row[0], row[1], row[2], row[3] or "", row[4] or "", row[5] or "", done_str, row[7]])
     buf.seek(0)
     file_bytes = buf.getvalue().encode("utf-8-sig")
     await update.effective_message.reply_document(
         document=io.BytesIO(file_bytes),
-        filename=f"×××××¨_{date.today().isoformat()}.csv",
-        caption="×× × ×× ×× ×ª×× ×× ×©×× ð",
+        filename=f"מזכיר_{date.today().isoformat()}.csv",
+        caption="הנה כל הנתונים שלך 📊",
     )
 
 
-# ââ Message handlers âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+# ── Message handlers ───────────────────────────────────────────────────────────
 
 async def handle_text(update, context):
     text = update.message.text.strip()
     chat_id = update.effective_chat.id
-    if text in ("/list", "×¨×©×××"):
+    if text in ("/list", "רשימה"):
         return await list_cmd(update, context)
-    if text in ("/today", "××××"):
+    if text in ("/today", "היום"):
         return await today_cmd(update, context)
-    if text in ("/export", "×××¦××"):
+    if text in ("/export", "ייצוא"):
         return await export_cmd(update, context)
     await _process_content(update, chat_id, text, context=context)
 
@@ -265,12 +265,12 @@ async def handle_voice(update, context):
     voice = update.message.voice
     file = await context.bot.get_file(voice.file_id)
     audio_bytes = bytes(await file.download_as_bytearray())
-    await update.message.reply_text("ð¤ ××ª×××â¦")
+    await update.message.reply_text("🎤 מתמלל…")
     try:
         text = await llm.transcribe(audio_bytes, "audio.ogg")
     except Exception as e:
         logger.error(f"Transcription error: {e}")
-        await update.message.reply_text("×× ××¦×××ª× ××ª×××. × ×¡× ×©××.", reply_markup=main_keyboard())
+        await update.message.reply_text("לא הצלחתי לתמלל. נסה שוב.", reply_markup=main_keyboard())
         return
     await _process_content(update, chat_id, text, voice_text=text, context=context)
 
@@ -279,16 +279,16 @@ async def handle_photo(update, context):
     photo = update.message.photo[-1]
     file = await context.bot.get_file(photo.file_id)
     image_bytes = bytes(await file.download_as_bytearray())
-    await update.message.reply_text("ð¼ ×× ×ª× ×ª××× ×â¦")
+    await update.message.reply_text("🖼 מנתח תמונה…")
     try:
         description = await llm.describe_image(image_bytes)
     except Exception as e:
         logger.error(f"Vision error: {e}")
-        await update.message.reply_text("×× ××¦×××ª× ×× ×ª× ××ª ××ª××× ×.", reply_markup=main_keyboard())
+        await update.message.reply_text("לא הצלחתי לנתח את התמונה.", reply_markup=main_keyboard())
         return
-    item_id = db.save_item(chat_id, "note", f"[×ª××× ×] {description}")
+    item_id = db.save_item(chat_id, "note", f"[תמונה] {description}")
     await update.message.reply_text(
-        f"ð ×©××¨×ª×:\n_{description}_",
+        f"📝 שמרתי:\n_{description}_",
         parse_mode="Markdown",
         reply_markup=save_confirm_keyboard(item_id, "note"),
     )
@@ -298,7 +298,7 @@ async def _process_content(update, chat_id, text, voice_text=None, context=None)
         result = await llm.classify(text)
     except Exception as e:
         logger.error(f"Classification error: {e}")
-        await update.message.reply_text("×××¤×¡, ×©××××. × ×¡× ×©××.", reply_markup=main_keyboard())
+        await update.message.reply_text("אופס, שגיאה. נסה שוב.", reply_markup=main_keyboard())
         return
 
     msg_type = result.get("type", "note")
@@ -308,29 +308,29 @@ async def _process_content(update, chat_id, text, voice_text=None, context=None)
     recurring = result.get("recurring")
 
     if msg_type == "chat":
-        data_keywords = ["××©××××ª", "×ª××××¨××ª", "××××", "×××", "××© ××", "××¢×¨××ª", "×¤×ª××××ª", "×¨×©×××", "×× ××©"]
+        data_keywords = ["משימות", "תזכורות", "היום", "כמה", "יש לי", "הערות", "פתוחות", "רשימה", "מה יש"]
         if any(kw in text for kw in data_keywords):
             tasks = db.get_items(chat_id, type_="task", done=0)
             reminders = db.get_items(chat_id, type_="reminder", done=0)
             notes = db.get_items(chat_id, type_="note", done=0)
             today_items = db.get_today_items(chat_id)
             summary = (
-                f"××©××××ª ×¤×ª××××ª ({len(tasks)}): {', '.join(r[3][:30] for r in tasks[:8])}\n"
-                f"×ª××××¨××ª ×¤×¢××××ª ({len(reminders)}): {', '.join(r[3][:30] for r in reminders[:5])}\n"
-                f"××¢×¨××ª ({len(notes)}): {', '.join(r[3][:30] for r in notes[:5])}\n"
-                f"×××× ({len(today_items)}): {', '.join(r[3][:30] for r in today_items[:5])}"
+                f"משימות פתוחות ({len(tasks)}): {', '.join(r[3][:30] for r in tasks[:8])}\n"
+                f"תזכורות פעילות ({len(reminders)}): {', '.join(r[3][:30] for r in reminders[:5])}\n"
+                f"הערות ({len(notes)}): {', '.join(r[3][:30] for r in notes[:5])}\n"
+                f"היום ({len(today_items)}): {', '.join(r[3][:30] for r in today_items[:5])}"
             )
             try:
                 reply = await llm.chat_with_context(text, summary)
             except Exception as e:
                 logger.error(f"Chat error: {e}")
-                reply = "×× ××¦×××ª× ××¢× ××ª, × ×¡× ×©××."
+                reply = "לא הצלחתי לענות, נסה שוב."
         else:
             try:
                 reply = await llm.chat(text)
             except Exception as e:
                 logger.error(f"Chat error: {e}")
-                reply = "×× ××¦×××ª× ××¢× ××ª, × ×¡× ×©××."
+                reply = "לא הצלחתי לענות, נסה שוב."
         await update.message.reply_text(reply, reply_markup=main_keyboard())
         return
 
@@ -344,7 +344,7 @@ async def _process_content(update, chat_id, text, voice_text=None, context=None)
             if today_dt > now:
                 due_date = now.date().isoformat()  # time is still future today
             else:
-                due_date = (now.date() + timedelta(days=1)).isoformat()  # already passed → tomorrow
+                due_date = (now.date() + timedelta(days=1)).isoformat()  # already passed � tomorrow
         except Exception:
             due_date = now.date().isoformat()  # fallback to today
 
@@ -355,14 +355,14 @@ async def _process_content(update, chat_id, text, voice_text=None, context=None)
                 "type": msg_type, "content": content,
                 "recurring": recurring, "voice_text": voice_text,
             }
-        emoji = "â" if msg_type == "task" else "â°"
-        await update.message.reply_text("â³ ×××©× ×¢× ×××¢×××â¦")
+        emoji = "✅" if msg_type == "task" else "⏰"
+        await update.message.reply_text("⏳ חושב על מועדים…")
         try:
             suggestions = await llm.suggest_times(content)
         except Exception:
             suggestions = llm._fallback_suggestions()
         await update.message.reply_text(
-            f"{emoji} *{content}*\n\n××ª× ××××××¨ ××?",
+            f"{emoji} *{content}*\n\nמתי להזכיר לך?",
             parse_mode="Markdown",
             reply_markup=smart_time_keyboard(suggestions),
         )
@@ -372,20 +372,20 @@ async def _process_content(update, chat_id, text, voice_text=None, context=None)
 
 async def _save_and_confirm(update, chat_id, msg_type, content, due_date, due_time, recurring, voice_text=None):
     item_id = db.save_item(chat_id, msg_type, content, due_date, due_time, recurring)
-    emoji = {"task": "â", "note": "ð", "reminder": "â°"}.get(msg_type, "ð¾")
+    emoji = {"task": "✅", "note": "📝", "reminder": "⏰"}.get(msg_type, "💾")
     details = ""
     if voice_text and voice_text != content:
-        details += f"\nð¤ _{voice_text}_"
+        details += f"\n🎤 _{voice_text}_"
     if due_date:
-        details += f"\nð {due_date}"
+        details += f"\n📅 {due_date}"
     if due_time:
-        details += f" â° {due_time}"
+        details += f" ⏰ {due_time}"
     if recurring:
         recurring_labels = {
-            "daily": "×× ×××", "weekly:sun": "×× ×¨××©××",
-            "weekly:mon": "×× ×©× ×", "weekly:fri": "×× ×©××©×", "monthly": "×× ××××©",
+            "daily": "כל יום", "weekly:sun": "כל ראשון",
+            "weekly:mon": "כל שני", "weekly:fri": "כל שישי", "monthly": "כל חודש",
         }
-        details += f"\nð {recurring_labels.get(recurring, recurring)}"
+        details += f"\n🔄 {recurring_labels.get(recurring, recurring)}"
     reply_target = update.message or update.effective_message
     await reply_target.reply_text(
         f"{emoji} *{content}*{details}",
@@ -394,7 +394,7 @@ async def _save_and_confirm(update, chat_id, msg_type, content, due_date, due_ti
     )
 
 
-# ââ Callback query handler âââââââââââââââââââââââââââââââââââââââââââââââââââââ
+# ── Callback query handler ─────────────────────────────────────────────────────
 
 async def handle_callback(update, context):
     query = update.callback_query
@@ -407,7 +407,7 @@ async def handle_callback(update, context):
     if data == "cmd:export": return await export_cmd(update, context)
     if data == "cmd:help":   return await help_cmd(update, context)
     if data == "cmd:main":
-        await query.edit_message_text("×ª×¤×¨×× ×¨××©×:", reply_markup=main_keyboard())
+        await query.edit_message_text("תפריט ראשי:", reply_markup=main_keyboard())
         return
 
     parts = data.split(":", 1)
@@ -415,11 +415,11 @@ async def handle_callback(update, context):
         return
     action, param = parts
 
-    # ââ New item: smart date+time selection ââ
+    # ── New item: smart date+time selection ──
     if action == "setdatetime":
         pending = context.user_data.get("pending")
         if not pending:
-            await query.edit_message_text("×× × ××¦× ×¤×¨×× ×××ª××.", reply_markup=main_keyboard())
+            await query.edit_message_text("לא נמצא פריט ממתין.", reply_markup=main_keyboard())
             return
         dt_parts = param.split("|", 1)
         selected_date = dt_parts[0] if dt_parts[0] else None
@@ -427,21 +427,21 @@ async def handle_callback(update, context):
         item_id = db.save_item(chat_id, pending["type"], pending["content"],
                                selected_date, selected_time, pending.get("recurring"))
         context.user_data.pop("pending", None)
-        emoji = "â" if pending["type"] == "task" else "â°"
-        label = "××©×××" if pending["type"] == "task" else "×ª××××¨×ª"
+        emoji = "✅" if pending["type"] == "task" else "⏰"
+        label = "משימה" if pending["type"] == "task" else "תזכורת"
         details = ""
         if selected_date:
-            details += f"\nð {selected_date}"
+            details += f"\n📅 {selected_date}"
         if selected_time:
-            details += f" â° {selected_time}"
+            details += f" ⏰ {selected_time}"
         await query.edit_message_text(
-            f"{emoji} × ×©××¨ ×*{label}*: {pending['content']}{details}",
+            f"{emoji} נשמר כ*{label}*: {pending['content']}{details}",
             parse_mode="Markdown",
             reply_markup=save_confirm_keyboard(item_id, pending["type"]),
         )
         return
 
-    # ââ Existing item: reschedule to new future time ââ
+    # ── Existing item: reschedule to new future time ──
     if action == "reschedule":
         # param format: "ID|YYYY-MM-DD|HH:MM"
         rp = param.split("|", 2)
@@ -460,24 +460,24 @@ async def handle_callback(update, context):
         )
         details = ""
         if new_date:
-            details += f"\nð {new_date}"
+            details += f"\n📅 {new_date}"
         if new_time:
-            details += f" â° {new_time}"
+            details += f" ⏰ {new_time}"
         await query.edit_message_text(
-            f"ð ×ª××××¨×ª × ×××ª×!{details}",
+            f"📅 תזכורת נדחתה!{details}",
             parse_mode="Markdown",
             reply_markup=main_keyboard(),
         )
         return
 
-    # ââ Cancel item (mark done / dismiss) ââ
+    # ── Cancel item (mark done / dismiss) ──
     if action == "cancel_item":
         try:
             item_id = int(param)
         except ValueError:
             return
         db.mark_done(item_id)
-        await query.edit_message_text("ð ××©××× ×××××.", reply_markup=main_keyboard())
+        await query.edit_message_text("🗑 משימה בוטלה.", reply_markup=main_keyboard())
         return
 
     try:
@@ -487,15 +487,15 @@ async def handle_callback(update, context):
 
     if action == "done":
         db.mark_done(item_id)
-        await query.edit_message_text("â ×¡××× ××××¦×¢!", reply_markup=main_keyboard())
+        await query.edit_message_text("✅ סומן כבוצע!", reply_markup=main_keyboard())
     elif action == "delete":
         db.mark_done(item_id)
-        await query.edit_message_text("ð × ×××§.", reply_markup=main_keyboard())
+        await query.edit_message_text("🗑 נמחק.", reply_markup=main_keyboard())
     elif action == "snooze1h":
         db.snooze_item(item_id, hours=1)
-        await query.edit_message_text("â° × ××× ××©×¢× ×××ª.", reply_markup=main_keyboard())
+        await query.edit_message_text("⏰ נדחה בשעה אחת.", reply_markup=main_keyboard())
     elif action == "tomorrow":
         db.postpone_to_tomorrow(item_id)
-        await query.edit_message_text("ð × ××× ××××¨.", reply_markup=main_keyboard())
+        await query.edit_message_text("📅 נדחה למחר.", reply_markup=main_keyboard())
     elif action == "saved":
-        await query.answer("×××¨ × ×©××¨ â", show_alert=False)
+        await query.answer("כבר נשמר ✓", show_alert=False)
