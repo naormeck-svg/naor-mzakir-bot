@@ -12,6 +12,20 @@ import db
 
 logger = logging.getLogger(__name__)
 
+TIPS = [
+    "💡 מינימליזם לא אומר לחיות עם פחות — אלא לחיות עם מה שחשוב.",
+    "💡 רשימה של 3 משימות חשובות ביום עדיפה על רשימה של 20.",
+    "💡 לפני שאתה מוסיף משימה — שאל: מה קורה אם לא תעשה את זה?",
+    "💡 ה\'לא\' שאתה אומר לדברים לא חשובים הוא ה\'כן\' שאתה אומר לדברים שחשובים.",
+    "💡 עשה משימה אחת עד הסוף לפני שאתה מתחיל הבאה.",
+    "💡 תיבת הדואר הנכנס שלך היא רשימת העדיפויות של אחרים. שמור על שלך.",
+    "💡 כבה התראות. הן עולות לך ביותר ממה שאתה חושב.",
+    "💡 עשה את המשימה הקשה ביותר ראשונה בבוקר.",
+    "💡 \'מחר\' הוא המקום שבו מתות רוב המשימות.",
+    "💡 פחות עדיף — בחר עמוק על פני רחב.",
+]
+_tip_index = 0
+
 
 # ── Keyboards ──────────────────────────────────────────────────────────────────
 
@@ -63,15 +77,14 @@ def ask_date_keyboard():
     this_friday = today + timedelta(days=days_to_friday)
     days_to_monday = (0 - today.weekday()) % 7 or 7
     next_monday = today + timedelta(days=days_to_monday)
-
     return InlineKeyboardMarkup([
         [
-            InlineKeyboardButton(f"📅 היום ({today.strftime('%d/%m')})",    callback_data=f"setdate:{today.isoformat()}"),
-            InlineKeyboardButton(f"📅 מחר ({tomorrow.strftime('%d/%m')})",  callback_data=f"setdate:{tomorrow.isoformat()}"),
+            InlineKeyboardButton(f"📅 היום ({today.strftime('%d/%m')})", callback_data=f"setdate:{today.isoformat()}"),
+            InlineKeyboardButton(f"📅 מחר ({tomorrow.strftime('%d/%m')})", callback_data=f"setdate:{tomorrow.isoformat()}"),
         ],
         [
-            InlineKeyboardButton(f"📅 מחרתיים ({day_after.strftime('%d/%m')})",  callback_data=f"setdate:{day_after.isoformat()}"),
-            InlineKeyboardButton(f"📅 שישי ({this_friday.strftime('%d/%m')})",    callback_data=f"setdate:{this_friday.isoformat()}"),
+            InlineKeyboardButton(f"📅 מחרתיים ({day_after.strftime('%d/%m')})", callback_data=f"setdate:{day_after.isoformat()}"),
+            InlineKeyboardButton(f"📅 שישי ({this_friday.strftime('%d/%m')})", callback_data=f"setdate:{this_friday.isoformat()}"),
         ],
         [
             InlineKeyboardButton(f"📅 שבוע הבא ({next_monday.strftime('%d/%m')})", callback_data=f"setdate:{next_monday.isoformat()}"),
@@ -107,19 +120,28 @@ async def start(update, context):
     )
 
 async def help_cmd(update, context):
-    await update.message.reply_text(
+    await update.effective_message.reply_text(
         "מה אני יכול לעשות:\n\n"
         "🎤 *קול* — אוגר ומסווג אוטומטית\n"
         "💬 *טקסט* — אותו דבר\n"
         "🖼 *תמונה* — תיאור ושמירה\n\n"
         "פקודות:\n"
-        "/list — כל המשימות\n"
+        "/list — משימות פתוחות\n"
         "/today — משימות להיום\n"
-        "/export — ייצוא ל-CSV\n\n"
-        "תזכורות נשלחות אוטומטית עם אפשרות לדחות.",
+        "/notes — הערות שמורות\n"
+        "/reminders — תזכורות פעילות\n"
+        "/focus — המיקוד של היום\n"
+        "/focusblock — בלוק עבודה ממוקדת\n"
+        "/history — מה שבוצע\n"
+        "/tip — טיפ מינימליזם\n"
+        "/export — ייצוא ל-CSV\n"
+        "/menu — תפריט כפתורים",
         parse_mode="Markdown",
         reply_markup=main_keyboard(),
     )
+
+async def menu_cmd(update, context):
+    await update.effective_message.reply_text("תפריט:", reply_markup=main_keyboard())
 
 async def list_cmd(update, context):
     chat_id = update.effective_chat.id
@@ -146,6 +168,74 @@ async def today_cmd(update, context):
         time_str = f" {row[5]}" if row[5] else ""
         text += f"{emoji} {row[3]}{time_str}\n"
     await update.effective_message.reply_text(text, parse_mode="Markdown", reply_markup=task_list_keyboard(items))
+
+async def notes_cmd(update, context):
+    chat_id = update.effective_chat.id
+    items = db.get_items(chat_id, type_="note", done=0)
+    if not items:
+        await update.effective_message.reply_text("אין הערות שמורות.", reply_markup=main_keyboard())
+        return
+    text = "📝 *הערות שמורות:*\n\n"
+    for row in items:
+        text += f"• {row[3]}\n"
+    await update.effective_message.reply_text(text, parse_mode="Markdown", reply_markup=main_keyboard())
+
+async def reminders_cmd(update, context):
+    chat_id = update.effective_chat.id
+    items = db.get_items(chat_id, type_="reminder", done=0)
+    if not items:
+        await update.effective_message.reply_text("אין תזכורות פעילות.", reply_markup=main_keyboard())
+        return
+    text = "⏰ *תזכורות פעילות:*\n\n"
+    for row in items:
+        date_str = f" {row[4]}" if row[4] else ""
+        time_str = f" {row[5]}" if row[5] else ""
+        text += f"• {row[3]}{date_str}{time_str}\n"
+    await update.effective_message.reply_text(text, parse_mode="Markdown", reply_markup=main_keyboard())
+
+async def focus_cmd(update, context):
+    chat_id = update.effective_chat.id
+    today_items = db.get_today_items(chat_id)
+    all_tasks = db.get_items(chat_id, type_="task", done=0)
+    focus_item = None
+    if today_items:
+        focus_item = today_items[0][3]
+    elif all_tasks:
+        focus_item = all_tasks[0][3]
+    if focus_item:
+        text = f"🎯 *מיקוד היום:*\n\n_{focus_item}_\n\nהתמקד במשימה הזאת עכשיו."
+    else:
+        text = "🎯 אין משימות פתוחות — יום פנוי! ✨"
+    await update.effective_message.reply_text(text, parse_mode="Markdown", reply_markup=main_keyboard())
+
+async def focusblock_cmd(update, context):
+    text = (
+        "🔒 *בלוק מיקוד — 25 דקות*\n\n"
+        "כבה התראות. סגור טאבים מיותרים.\n"
+        "בחר משימה אחת — ועשה רק אותה.\n\n"
+        "⏱ נפגשים בעוד 25 דקות.\n\n"
+        "_הפוקוס שלך = הכוח שלך._"
+    )
+    await update.effective_message.reply_text(text, parse_mode="Markdown", reply_markup=main_keyboard())
+
+async def tip_cmd(update, context):
+    global _tip_index
+    tip = TIPS[_tip_index % len(TIPS)]
+    _tip_index += 1
+    await update.effective_message.reply_text(tip, reply_markup=main_keyboard())
+
+async def history_cmd(update, context):
+    chat_id = update.effective_chat.id
+    items = db.get_items(chat_id, done=1)
+    if not items:
+        await update.effective_message.reply_text("אין היסטוריה עדיין.", reply_markup=main_keyboard())
+        return
+    recent = list(items)[-20:]
+    text = "✅ *בוצע לאחרונה:*\n\n"
+    for row in recent:
+        emoji = {"task": "✅", "note": "📝", "reminder": "⏰"}.get(row[2], "•")
+        text += f"{emoji} {row[3]}\n"
+    await update.effective_message.reply_text(text, parse_mode="Markdown", reply_markup=main_keyboard())
 
 async def export_cmd(update, context):
     chat_id = update.effective_chat.id
@@ -238,7 +328,6 @@ async def _process_content(update, chat_id, text, voice_text=None, context=None)
         await update.message.reply_text(reply, reply_markup=main_keyboard())
         return
 
-    # Ask for missing date (tasks and reminders)
     if msg_type in ("task", "reminder") and not due_date:
         if context is not None:
             context.user_data["pending"] = {
@@ -253,7 +342,6 @@ async def _process_content(update, chat_id, text, voice_text=None, context=None)
         )
         return
 
-    # Ask for missing time (reminders only)
     if msg_type == "reminder" and not due_time:
         if context is not None:
             context.user_data["pending"] = {
