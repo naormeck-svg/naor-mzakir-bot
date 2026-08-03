@@ -15,14 +15,14 @@ logger = logging.getLogger(__name__)
 TIPS = [
     "💡 מינימליזם לא אומר לחיות עם פחות — אלא לחיות עם מה שחשוב.",
     "💡 רשימה של 3 משימות חשובות ביום עדיפה על רשימה של 20.",
-    "💡 לפני שאתה מוסיף משימה — שאל: מה קורה אם לא תעשה את זה?",
+    "💡 לǤני שאתה מוסיף משימה — שאל: מה קורה אם לא תעשה את זה?",
     "💡 עשה משימה אחת עד הסוף לפני שאתה מתחיל הבאה.",
     "💡 כבה התראות. הן עולות לך ביותר ממה שאתה חושב.",
-    "💡 עשה את המשימה הקשה ביותר ראשונה בבוקר.",
-    "💡 תיבת הדואר הנכנס שלך היא רשימת העדיפויות של אחרים. שמור על שלך.",
-    "💡 \'מחר\' הוא המקום שבו מתות רוב המשימות.",
-    "💡 פחות עדיף — בחר עמוק על פני רחב.",
-    "💡 הפסקה של 5 דקות כל שעה מגדילה ריכוז — לא מקטינה.",
+    "💡 עשה את המשימה הקשה ביותר שאוונה בבוקר.",
+    "💡 תיבת הדואר הנכנס שלך היא רשימת העדיפויות של אחרים. שמונ על שלך.",
+    "💡 'מחר' הוא המקום שבו מתות רוב המשימות.",
+    "💡 פחות עדיף — בחר עמוק על פני שחב.",
+    "💡 הפסקה של 5 דקות כל שעה מגדילה שיכוז — לא מקטינה.",
 ]
 _tip_index = 0
 
@@ -51,15 +51,6 @@ def save_confirm_keyboard(item_id, type_):
         ],
     ])
 
-def reminder_keyboard(item_id):
-    return InlineKeyboardMarkup([
-        [InlineKeyboardButton("✅ סיימתי", callback_data=f"done:{item_id}")],
-        [
-            InlineKeyboardButton("⏰ דחה שעה", callback_data=f"snooze1h:{item_id}"),
-            InlineKeyboardButton("📅 למחר", callback_data=f"tomorrow:{item_id}"),
-        ],
-    ])
-
 def task_list_keyboard(items):
     buttons = []
     for row in items:
@@ -70,14 +61,28 @@ def task_list_keyboard(items):
     return InlineKeyboardMarkup(buttons)
 
 def smart_time_keyboard(suggestions: list):
-    """3 smart suggestion buttons, each combining date+time in one tap."""
+    """3 smart suggestion buttons for new items (saves from pending)."""
     buttons = []
     for s in suggestions[:3]:
         label = s.get("label", "?")
         dt = s.get("date", "")
         tm = s.get("time") or "none"
-        # callback: setdatetime:YYYY-MM-DD|HH:MM  (fits in 64 bytes)
         buttons.append([InlineKeyboardButton(f"📅 {label}", callback_data=f"setdatetime:{dt}|{tm}")])
+    return InlineKeyboardMarkup(buttons)
+
+def reschedule_keyboard(item_id: int, suggestions: list):
+    """Keyboard shown when a reminder fires: 3 reschedule options + done + cancel."""
+    buttons = []
+    for s in suggestions[:3]:
+        label = s.get("label", "?")
+        dt = s.get("date", "")
+        tm = s.get("time") or "none"
+        # callback: reschedule:ID|YYYY-MM-DD|HH:MM  (fits in 64 bytes for typical IDs)
+        buttons.append([InlineKeyboardButton(f"📅 {label}", callback_data=f"reschedule:{item_id}|{dt}|{tm}")])
+    buttons.append([
+        InlineKeyboardButton("✅ בוצע", callback_data=f"done:{item_id}"),
+        InlineKeyboardButton("🗑 ביטול", callback_data=f"cancel_item:{item_id}"),
+    ])
     return InlineKeyboardMarkup(buttons)
 
 
@@ -184,7 +189,7 @@ async def focusblock_cmd(update, context):
     text = (
         "🔒 *בלוק מיקוד — 25 דקות*\n\n"
         "כבה התראות. סגור טאבים מיותרים.\n"
-        "בחר משימה אחת — ועשה רק אותה.\n\n"
+        "בחר משימה אחת — ועשה שק אותה.\n\n"
         "⏱ נפגשים בעוד 25 דקות.\n\n"
         "_הפוקוס שלך = הכוח שלך._"
     )
@@ -216,7 +221,7 @@ async def export_cmd(update, context):
         await update.effective_message.reply_text("אין נתונים לייצוא עדיין.", reply_markup=main_keyboard())
         return
     buf = io.StringIO()
-    buf.write("\ufeff")
+    buf.write("﻿")
     writer = csv.writer(buf)
     writer.writerow(["ID", "סוג", "תוכן", "תאריך", "שעה", "חוזר", "בוצע", "נוצר"])
     for row in rows:
@@ -368,7 +373,7 @@ async def handle_callback(update, context):
         return
     action, param = parts
 
-    # Smart date+time selection (3 buttons flow)
+    # ── New item: smart date+time selection ──
     if action == "setdatetime":
         pending = context.user_data.get("pending")
         if not pending:
@@ -392,6 +397,45 @@ async def handle_callback(update, context):
             parse_mode="Markdown",
             reply_markup=save_confirm_keyboard(item_id, pending["type"]),
         )
+        return
+
+    # ── Existing item: reschedule to new future time ──
+    if action == "reschedule":
+        # param format: "ID|YYYY-MM-DD|HH:MM"
+        rp = param.split("|", 2)
+        if len(rp) < 2:
+            return
+        try:
+            item_id = int(rp[0])
+        except ValueError:
+            return
+        new_date = rp[1] if rp[1] else None
+        new_time = rp[2] if len(rp) > 2 and rp[2] != "none" else None
+        conn = db.get_conn()
+        conn.execute(
+            "UPDATE items SET due_date=?, due_time=?, reminded_at=NULL, done=0 WHERE id=?",
+            (new_date, new_time, item_id)
+        )
+        details = ""
+        if new_date:
+            details += f"\n📅 {new_date}"
+        if new_time:
+            details += f" ⏰ {new_time}"
+        await query.edit_message_text(
+            f"📅 תזכורת נדחתה!{details}",
+            parse_mode="Markdown",
+            reply_markup=main_keyboard(),
+        )
+        return
+
+    # ── Cancel item (mark done / dismiss) ──
+    if action == "cancel_item":
+        try:
+            item_id = int(param)
+        except ValueError:
+            return
+        db.mark_done(item_id)
+        await query.edit_message_text("🗑 משימה בוטלה.", reply_markup=main_keyboard())
         return
 
     try:
