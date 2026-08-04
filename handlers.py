@@ -540,7 +540,7 @@ async def handle_callback(update, context):
             "all": "פריטים"
         }.get(param, param)
         await query.edit_message_text(f"✅ נמחקו {deleted} {type_label}.", reply_markup=main_keyboard())
-        elif action == "saved":
+    elif action == "saved":
         await query.answer("כבר נשמר ✓", show_alert=False)
 
 
