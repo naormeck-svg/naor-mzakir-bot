@@ -512,9 +512,7 @@ async def handle_callback(update, context):
             [InlineKeyboardButton("❌ ביטול", callback_data="clear_cancel")],
         ])
         await query.edit_message_text(
-            f"❓ *האם אתה בטוח?*
-רוצה למחוק את כל ה{type_label}?
-_פעולה זו לא ניתנת לביטול._",
+            f"❓ *האם אתה בטוח?*\nרוצה למחוק את כל ה{type_label}?\n_פעולה זו לא ניתנת לביטול._",
             parse_mode="Markdown", reply_markup=keyboard
         )
     elif action == "clear_final":
@@ -530,11 +528,7 @@ _פעולה זו לא ניתנת לביטול._",
             [InlineKeyboardButton("❌ ביטול", callback_data="clear_cancel")],
         ])
         await query.edit_message_text(
-            f"⚠️ *אזהרה אחרונה!*
-אתה עומד למחוק {count} {type_label} לצמיתות.
-*לא ניתן לשחזר.*
-
-האם אתה בטוח לגמרי?",
+            f"⚠️ *אזהרה אחרונה!*\nאתה עומד למחוק {count} {type_label} לצמיתות.\n*לא ניתן לשחזר.*\n\nהאם אתה בטוח לגמרי?",
             parse_mode="Markdown", reply_markup=keyboard
         )
     elif action == "clear_execute":
