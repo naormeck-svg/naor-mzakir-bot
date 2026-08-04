@@ -409,6 +409,9 @@ async def handle_callback(update, context):
     if data == "cmd:main":
         await query.edit_message_text("תפריט ראשי:", reply_markup=main_keyboard())
         return
+    if data == "clear_cancel":
+        await query.edit_message_text("ביטול. לא נמחק כלום.", reply_markup=main_keyboard())
+        return
 
     parts = data.split(":", 1)
     if len(parts) != 2:
@@ -497,5 +500,72 @@ async def handle_callback(update, context):
     elif action == "tomorrow":
         db.postpone_to_tomorrow(item_id)
         await query.edit_message_text("📅 נדחה למחר.", reply_markup=main_keyboard())
-    elif action == "saved":
+    elif action == "clear_confirm":
+        type_label = {
+            "task": "משימות",
+            "reminder": "תזכורות",
+            "note": "הערות",
+            "all": "הכל"
+        }.get(param, param)
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("כן, המשך ←", callback_data=f"clear_final:{param}")],
+            [InlineKeyboardButton("❌ ביטול", callback_data="clear_cancel")],
+        ])
+        await query.edit_message_text(
+            f"❓ *האם אתה בטוח?*
+רוצה למחוק את כל ה{type_label}?
+_פעולה זו לא ניתנת לביטול._",
+            parse_mode="Markdown", reply_markup=keyboard
+        )
+    elif action == "clear_final":
+        count = db.count_items_by_type(chat_id, param)
+        type_label = {
+            "task": "משימות",
+            "reminder": "תזכורות",
+            "note": "הערות",
+            "all": "פריטים"
+        }.get(param, param)
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("U0001F534 כן, מחק הכל", callback_data=f"clear_execute:{param}")],
+            [InlineKeyboardButton("❌ ביטול", callback_data="clear_cancel")],
+        ])
+        await query.edit_message_text(
+            f"⚠️ *אזהרה אחרונה!*
+אתה עומד למחוק {count} {type_label} לצמיתות.
+*לא ניתן לשחזר.*
+
+האם אתה בטוח לגמרי?",
+            parse_mode="Markdown", reply_markup=keyboard
+        )
+    elif action == "clear_execute":
+        deleted = db.delete_items_by_type(chat_id, None if param == "all" else param)
+        type_label = {
+            "task": "משימות",
+            "reminder": "תזכורות",
+            "note": "הערות",
+            "all": "פריטים"
+        }.get(param, param)
+        await query.edit_message_text(f"✅ נמחקו {deleted} {type_label}.", reply_markup=main_keyboard())
+        elif action == "saved":
         await query.answer("כבר נשמר ✓", show_alert=False)
+
+
+async def clear_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Show clear menu with type selection."""
+    chat_id = update.effective_chat.id
+    tasks = db.count_items_by_type(chat_id, "task")
+    reminders = db.count_items_by_type(chat_id, "reminder")
+    notes = db.count_items_by_type(chat_id, "note")
+    total = tasks + reminders + notes
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton(f"U0001F4CB משימות ({tasks})", callback_data="clear_confirm:task"),
+         InlineKeyboardButton(f"⏰ תזכורות ({reminders})", callback_data="clear_confirm:reminder")],
+        [InlineKeyboardButton(f"U0001F4DD הערות ({notes})", callback_data="clear_confirm:note"),
+         InlineKeyboardButton(f"U0001F4A5 הכל ({total})", callback_data="clear_confirm:all")],
+        [InlineKeyboardButton("❌ ביטול", callback_data="clear_cancel")],
+    ])
+    await update.effective_message.reply_text(
+        "U0001F5C2 *מה תרצה למחוק?*",
+        parse_mode="Markdown",
+        reply_markup=keyboard
+    )
