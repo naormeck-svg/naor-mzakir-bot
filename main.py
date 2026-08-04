@@ -71,6 +71,7 @@ def main():
     app.add_handler(CommandHandler("list",       handlers.list_cmd))
     app.add_handler(CommandHandler("today",      handlers.today_cmd))
     app.add_handler(CommandHandler("export",     handlers.export_cmd))
+    app.add_handler(CommandHandler("clear",       handlers.clear_cmd))
     app.add_handler(CommandHandler("menu",       handlers.menu_cmd))
 
     # New commands
