@@ -257,3 +257,36 @@ def export_all(chat_id):
         "SELECT id, type, content, due_date, due_time, recurring, done, created_at FROM items WHERE chat_id=? ORDER BY created_at DESC",
         (chat_id,)
     ).fetchall()
+
+
+def count_items_by_type(chat_id: int, type_: str = None) -> int:
+    """Count open items by type (or all if type_ is None/all)."""
+    conn = get_conn()
+    if type_ is None or type_ == "all":
+        row = conn.execute(
+            "SELECT COUNT(*) FROM items WHERE chat_id=? AND done=0",
+            (chat_id,)
+        ).fetchone()
+    else:
+        row = conn.execute(
+            "SELECT COUNT(*) FROM items WHERE chat_id=? AND type=? AND done=0",
+            (chat_id, type_)
+        ).fetchone()
+    return row[0] if row else 0
+
+
+def delete_items_by_type(chat_id: int, type_: str = None) -> int:
+    """Delete open items by type. Returns count deleted."""
+    count = count_items_by_type(chat_id, type_)
+    conn = get_conn()
+    if type_ is None or type_ == "all":
+        conn.execute(
+            "DELETE FROM items WHERE chat_id=? AND done=0",
+            (chat_id,)
+        )
+    else:
+        conn.execute(
+            "DELETE FROM items WHERE chat_id=? AND type=? AND done=0",
+            (chat_id, type_)
+        )
+    return count
