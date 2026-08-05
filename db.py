@@ -290,3 +290,9 @@ def delete_items_by_type(chat_id: int, type_: str = None) -> int:
             (chat_id, type_)
         )
     return count
+
+
+def delete_item(item_id: int):
+    """Permanently delete a single item by ID."""
+    conn = get_conn()
+    conn.execute("DELETE FROM items WHERE id=?", (item_id,))
