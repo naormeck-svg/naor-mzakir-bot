@@ -36,7 +36,26 @@ async def send_morning_digest(bot):
 
 
 async def check_reminders(app):
-    """Fire due reminders and show reschedule options."""
+    """Fire due reminders and show reschedule options. Respects quiet hours."""
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    _TZ = ZoneInfo("Asia/Jerusalem")
+    now = datetime.now(_TZ)
+    weekday = now.weekday()  # 0=Mon, 6=Sun... wait Python: 0=Mon,1=Tue,2=Wed,3=Thu,4=Fri,5=Sat,6=Sun
+    hour = now.hour
+    minute = now.minute
+
+    # Quiet hours check (Israel local time)
+    # Sun=6, Mon=0, Tue=1, Wed=2, Thu=3, Fri=4, Sat=5
+    if weekday == 5:  # Saturday
+        return  # No reminders on Saturday
+    elif weekday == 4:  # Friday
+        if hour < 8 or hour >= 16:
+            return  # Friday allowed 08:00-16:00 only
+    else:  # Sun(6) Mon(0) Tue(1) Wed(2) Thu(3)
+        if hour < 7 or hour >= 21:
+            return  # Sun-Thu allowed 07:00-21:00 only
+
     due = db.get_due_reminders()
     for row in due:
         item_id = row[0]
