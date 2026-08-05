@@ -492,7 +492,14 @@ async def handle_callback(update, context):
         db.mark_done(item_id)
         await query.edit_message_text("✅ סומן כבוצע!", reply_markup=main_keyboard())
     elif action == "delete":
-        db.mark_done(item_id)
+        # Show confirmation before deleting
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("🔴 כן, מחק", callback_data=f"delete_confirm:{item_id}"),
+             InlineKeyboardButton("❌ ביטול", callback_data=f"saved:{item_id}")],
+        ])
+        await query.edit_message_text("⚠️ למחוק לצמיתות?", reply_markup=keyboard)
+    elif action == "delete_confirm":
+        db.delete_item(item_id)
         await query.edit_message_text("🗑 נמחק.", reply_markup=main_keyboard())
     elif action == "snooze1h":
         db.snooze_item(item_id, hours=1)
@@ -524,7 +531,7 @@ async def handle_callback(update, context):
             "all": "פריטים"
         }.get(param, param)
         keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("U0001F534 כן, מחק הכל", callback_data=f"clear_execute:{param}")],
+            [InlineKeyboardButton("🔴 כן, מחק הכל", callback_data=f"clear_execute:{param}")],
             [InlineKeyboardButton("❌ ביטול", callback_data="clear_cancel")],
         ])
         await query.edit_message_text(
@@ -552,14 +559,14 @@ async def clear_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     notes = db.count_items_by_type(chat_id, "note")
     total = tasks + reminders + notes
     keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton(f"U0001F4CB משימות ({tasks})", callback_data="clear_confirm:task"),
+        [InlineKeyboardButton(f"📋 משימות ({tasks})", callback_data="clear_confirm:task"),
          InlineKeyboardButton(f"⏰ תזכורות ({reminders})", callback_data="clear_confirm:reminder")],
-        [InlineKeyboardButton(f"U0001F4DD הערות ({notes})", callback_data="clear_confirm:note"),
-         InlineKeyboardButton(f"U0001F4A5 הכל ({total})", callback_data="clear_confirm:all")],
+        [InlineKeyboardButton(f"📝 הערות ({notes})", callback_data="clear_confirm:note"),
+         InlineKeyboardButton(f"💥 הכל ({total})", callback_data="clear_confirm:all")],
         [InlineKeyboardButton("❌ ביטול", callback_data="clear_cancel")],
     ])
     await update.effective_message.reply_text(
-        "U0001F5C2 *מה תרצה למחוק?*",
+        "🗂 *מה תרצה למחוק?*",
         parse_mode="Markdown",
         reply_markup=keyboard
     )
