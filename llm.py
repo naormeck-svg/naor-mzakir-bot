@@ -17,31 +17,31 @@ HEADERS = {
 
 _TZ = ZoneInfo("Asia/Jerusalem")
 
-
 def _now():
     return datetime.now(_TZ)
 
-
 def _today():
     return datetime.now(_TZ).date()
-
 
 CLASSIFY_SYSTEM = """You are a classifier for a Hebrew personal assistant Telegram bot.
 Classify the user's message and return ONLY valid JSON, nothing else.
 
 Output format:
 {{
-  "type": "task" | "note" | "reminder" | "chat",
-  "content": "<cleaned text in Hebrew>",
-  "date": "<ISO date YYYY-MM-DD or null>",
-  "time": "<HH:MM or null>",
-  "recurring": "daily" | "weekly:sun" | "weekly:mon" | "weekly:tue" | "weekly:wed" | "weekly:thu" | "weekly:fri" | "monthly" | null
+"type": "task" | "note" | "reminder" | "agenda" | "chat" | "chat_people_query",
+"content": "<cleaned text in Hebrew>",
+"date": "<ISO date YYYY-MM-DD or null>",
+"time": "<HH:MM or null>",
+"recurring": "daily" | "weekly:sun" | "weekly:mon" | "weekly:tue" | "weekly:wed" | "weekly:thu" | "weekly:fri" | "monthly" | null,
+"person": "<person name or null>"
 }}
 
 Rules:
 - "task": something to do. Extract date/time if mentioned.
 - "reminder": something to remember at a specific time/date. Always has date or time.
 - "note": a thought, idea, or information to save. No action required.
+- "agenda": something the user wants to discuss with or ask a specific named person. Set person to their name, content to the topic only (without the person's name).
+- "chat_people_query": user asks what they wanted to discuss with a specific person. Set person to their name.
 - "chat": casual conversation, question, or greeting — do NOT save, just respond.
 - Handle Hebrew-English code-switching naturally.
 - Resolve relative dates using the date context below.
@@ -50,6 +50,11 @@ Rules:
 - "ביום שני" when today is Monday means NEXT Monday, not today.
 - recurring ONLY if explicit: "every day", "every week", "weekly", "daily" — in Hebrew or English.
 - content should be clean, concise Hebrew (or mixed) text.
+- person: only for "agenda" and "chat_people_query" types, null otherwise.
+- Examples:
+  - "רוצה לדבר עם נווה על הפרויקט" → {{"type":"agenda","content":"הפרויקט","person":"נווה","date":null,"time":null,"recurring":null}}
+  - "תזכיר לי לשאול את דוד על התקציב" → {{"type":"agenda","content":"התקציב","person":"דוד","date":null,"time":null,"recurring":null}}
+  - "מה רציתי לדבר עם נווה?" → {{"type":"chat_people_query","content":"","person":"נווה","date":null,"time":null,"recurring":null}}
 
 {date_context}
 """
@@ -79,12 +84,11 @@ CRITICAL RULES:
 
 Return ONLY valid JSON — an array of exactly 3 objects:
 [
-  {"label": "<short Hebrew label>", "date": "<YYYY-MM-DD>", "time": "<HH:MM>"},
-  {"label": "<short Hebrew label>", "date": "<YYYY-MM-DD>", "time": "<HH:MM>"},
-  {"label": "<short Hebrew label>", "date": "<YYYY-MM-DD>", "time": "<HH:MM>"}
+{"label": "<short Hebrew label>", "date": "<YYYY-MM-DD>", "time": "<HH:MM>"},
+{"label": "<short Hebrew label>", "date": "<YYYY-MM-DD>", "time": "<HH:MM>"},
+{"label": "<short Hebrew label>", "date": "<YYYY-MM-DD>", "time": "<HH:MM>"}
 ]
 """
-
 
 async def classify(text: str) -> dict:
     date_ctx = enrich_prompt_with_date_context()
@@ -100,7 +104,7 @@ async def classify(text: str) -> dict:
                     {"role": "user", "content": text},
                 ],
                 "temperature": 0.1,
-                "max_tokens": 200,
+                "max_tokens": 300,
             }
         )
         resp.raise_for_status()
@@ -112,8 +116,7 @@ async def classify(text: str) -> dict:
         try:
             return json.loads(raw)
         except json.JSONDecodeError:
-            return {"type": "note", "content": text, "date": None, "time": None, "recurring": None}
-
+            return {"type": "note", "content": text, "date": None, "time": None, "recurring": None, "person": None}
 
 async def chat(text: str, history: list = None) -> str:
     messages = [{"role": "system", "content": CHAT_SYSTEM}]
@@ -133,7 +136,6 @@ async def chat(text: str, history: list = None) -> str:
         )
         resp.raise_for_status()
         return resp.json()["choices"][0]["message"]["content"].strip()
-
 
 async def chat_with_context(text: str, user_data_summary: str) -> str:
     """Chat with access to user actual data from DB."""
@@ -155,7 +157,6 @@ async def chat_with_context(text: str, user_data_summary: str) -> str:
         resp.raise_for_status()
         return resp.json()["choices"][0]["message"]["content"].strip()
 
-
 async def transcribe(audio_bytes: bytes, filename: str = "audio.ogg") -> str:
     async with httpx.AsyncClient(timeout=30) as client:
         resp = await client.post(
@@ -166,7 +167,6 @@ async def transcribe(audio_bytes: bytes, filename: str = "audio.ogg") -> str:
         )
         resp.raise_for_status()
         return resp.text.strip()
-
 
 async def describe_image(image_bytes: bytes) -> str:
     b64 = base64.b64encode(image_bytes).decode()
@@ -179,7 +179,7 @@ async def describe_image(image_bytes: bytes) -> str:
                 "messages": [{
                     "role": "user",
                     "content": [
-                        {"type": "text", "text": "\u05EA\u05D0\u05E8 \u05D0\u05EA \u05D4\u05EA\u05DE\u05D5\u05E0\u05D4 \u05D4\u05D6\u05D0\u05EA \u05D1\u05E7\u05E6\u05E8\u05D4 \u05D1\u05E2\u05D1\u05E8\u05D9\u05EA. \u05D0\u05DD \u05D9\u05E9 \u05D8\u05E7\u05E1\u05D8 \u2014 \u05E6\u05D8\u05D8 \u05D0\u05D5\u05EA\u05D5."},
+                        {"type": "text", "text": "תאר את התמונה הזאת בקצרה בעברית. אם יש טקסט — צטט אותו."},
                         {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}},
                     ]
                 }],
@@ -188,7 +188,6 @@ async def describe_image(image_bytes: bytes) -> str:
         )
         resp.raise_for_status()
         return resp.json()["choices"][0]["message"]["content"].strip()
-
 
 async def suggest_times(content: str) -> list:
     """Generate 3 smart future time suggestions for a task/reminder."""
@@ -231,8 +230,7 @@ async def suggest_times(content: str) -> list:
                     return valid
         except Exception:
             pass
-    return _fallback_suggestions()
-
+        return _fallback_suggestions()
 
 def _fallback_suggestions() -> list:
     """Future-safe fallback suggestions using Israel timezone."""
@@ -243,15 +241,15 @@ def _fallback_suggestions() -> list:
 
     soon_dt = (now + timedelta(hours=1)).replace(minute=0, second=0, microsecond=0)
     if soon_dt.date() == now.date() and soon_dt.hour < 22:
-        soon = {"label": f"\u05D1\u05E2\u05D5\u05D3 \u05E9\u05E2\u05D4 ({soon_dt.strftime('%H:%M')})", "date": today, "time": soon_dt.strftime("%H:%M")}
+        soon = {"label": f"בעוד שעה ({soon_dt.strftime('%H:%M')})", "date": today, "time": soon_dt.strftime("%H:%M")}
     else:
-        soon = {"label": "\u05DE\u05D7\u05E8 \u05D1\u05D1\u05D5\u05E7\u05E8 09:00", "date": tomorrow, "time": "09:00"}
+        soon = {"label": "מחר בבוקר 09:00", "date": tomorrow, "time": "09:00"}
 
     evening_dt = now.replace(hour=20, minute=0, second=0, microsecond=0)
     if evening_dt > now:
-        medium = {"label": "\u05D4\u05E2\u05E8\u05D1 20:00", "date": today, "time": "20:00"}
+        medium = {"label": "הערב 20:00", "date": today, "time": "20:00"}
     else:
-        medium = {"label": "\u05DE\u05D7\u05E8 09:00", "date": tomorrow, "time": "09:00"}
+        medium = {"label": "מחר 09:00", "date": tomorrow, "time": "09:00"}
 
-    later = {"label": "\u05E9\u05D1\u05D5\u05E2 \u05D4\u05D1\u05D0 09:00", "date": next_week, "time": "09:00"}
+    later = {"label": "שבוע הבא 09:00", "date": next_week, "time": "09:00"}
     return [soon, medium, later]
