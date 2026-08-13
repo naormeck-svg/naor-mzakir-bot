@@ -121,13 +121,19 @@ def init_db():
         )
     """)
     conn.commit()
+    # Add person column if not yet present (idempotent migration)
+    try:
+        conn.execute("ALTER TABLE items ADD COLUMN person TEXT")
+        conn.commit()
+    except Exception:
+        pass  # Column already exists
 
 
-def save_item(chat_id, type_, content, due_date=None, due_time=None, recurring=None):
+def save_item(chat_id, type_, content, due_date=None, due_time=None, recurring=None, person=None):
     conn = get_conn()
     cur = conn.execute(
-        "INSERT INTO items (chat_id, type, content, due_date, due_time, recurring) VALUES (?,?,?,?,?,?)",
-        (chat_id, type_, content, due_date, due_time, recurring)
+        "INSERT INTO items (chat_id, type, content, due_date, due_time, recurring, person) VALUES (?,?,?,?,?,?,?)",
+        (chat_id, type_, content, due_date, due_time, recurring, person)
     )
     conn.commit()
     return cur.lastrowid
@@ -186,8 +192,8 @@ def get_due_reminders():
     current_time = now.strftime("%H:%M")
     return conn.execute(
         """SELECT * FROM items WHERE type='reminder' AND done=0
-           AND due_date <= ? AND (due_time IS NULL OR due_time <= ?)
-           AND (reminded_at IS NULL OR reminded_at < date('now', '-23 hours'))""",
+        AND due_date <= ? AND (due_time IS NULL OR due_time <= ?)
+        AND (reminded_at IS NULL OR reminded_at < date('now', '-23 hours'))""",
         (today, current_time)
     ).fetchall()
 
@@ -296,3 +302,51 @@ def delete_item(item_id: int):
     """Permanently delete a single item by ID."""
     conn = get_conn()
     conn.execute("DELETE FROM items WHERE id=?", (item_id,))
+
+
+# ── People Agenda ──────────────────────────────────────────────
+
+def get_people(chat_id):
+    """Return list of (person_name, count) for persons with open agenda items."""
+    conn = get_conn()
+    return conn.execute(
+        "SELECT person, COUNT(*) FROM items WHERE chat_id=? AND type='agenda' AND person IS NOT NULL AND done=0 GROUP BY person ORDER BY person",
+        (chat_id,)
+    ).fetchall()
+
+
+def get_items_by_person(chat_id, person):
+    """Return open agenda items for a specific person."""
+    conn = get_conn()
+    return conn.execute(
+        "SELECT * FROM items WHERE chat_id=? AND type='agenda' AND person=? AND done=0 ORDER BY created_at",
+        (chat_id, person)
+    ).fetchall()
+
+
+def find_similar_person(chat_id, name):
+    """Return an existing person name if a similar (but not identical) one exists, else None."""
+    conn = get_conn()
+    rows = conn.execute(
+        "SELECT DISTINCT person FROM items WHERE chat_id=? AND person IS NOT NULL",
+        (chat_id,)
+    ).fetchall()
+    name_lower = name.strip().lower()
+    for row in rows:
+        existing = row[0]
+        existing_lower = existing.strip().lower()
+        if existing_lower == name_lower:
+            return None  # Exact match — no dedup question needed
+        if name_lower in existing_lower or existing_lower in name_lower:
+            return existing
+    return None
+
+
+def merge_person(chat_id, old_name, new_name):
+    """Rename all items from old_name to new_name for this chat."""
+    conn = get_conn()
+    conn.execute(
+        "UPDATE items SET person=? WHERE chat_id=? AND person=?",
+        (new_name, chat_id, old_name)
+    )
+    conn.commit()
