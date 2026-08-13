@@ -10,7 +10,7 @@ from zoneinfo import ZoneInfo
 _TZ = ZoneInfo("Asia/Jerusalem")
 def _now(): return datetime.now(_TZ)
 def _today(): return datetime.now(_TZ).date()
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import ContextTypes
 import llm
 import db
@@ -48,6 +48,13 @@ def main_keyboard():
         ],
     ])
 
+
+def reply_keyboard():
+    return ReplyKeyboardMarkup(
+        [[KeyboardButton("👥 אנשים"), KeyboardButton("📋 משימות"), KeyboardButton("📅 היום")]],
+        resize_keyboard=True,
+        persistent=True,
+    )
 def save_confirm_keyboard(item_id, type_):
     return InlineKeyboardMarkup([
         [
@@ -115,7 +122,7 @@ async def start(update, context):
         "שלום! אני המזכיר שלך 🤖\n\n"
         "שלח לי קול, טקסט או תמונה — אשמור הכל מייד.\n"
         "לא צריך לבקש ממני לשמור, זה קורה אוטומטית.",
-        reply_markup=main_keyboard(),
+        reply_markup=reply_keyboard(),
     )
 
 async def help_cmd(update, context):
@@ -288,13 +295,13 @@ async def people_cmd(update, context):
 async def handle_text(update, context):
     text = update.message.text.strip()
     chat_id = update.effective_chat.id
-    if text in ("/list", "רשימה"):
+    if text in ("/list", "רשימה", "📋 משימות"):
         return await list_cmd(update, context)
-    if text in ("/today", "היום"):
+    if text in ("/today", "היום", "📅 היום"):
         return await today_cmd(update, context)
     if text in ("/export", "ייצוא"):
         return await export_cmd(update, context)
-    if text in ("/people", "אנשים"):
+    if text in ("/people", "אנשים", "👥 אנשים"):
         return await people_cmd(update, context)
     await _process_content(update, chat_id, text, context=context)
 
