@@ -344,7 +344,18 @@ async def _process_content(update, chat_id, text, voice_text=None, context=None)
             if today_dt > now:
                 due_date = now.date().isoformat()  # time is still future today
             else:
-                due_date = (now.date() + timedelta(days=1)).isoformat()  # already passed � tomorrow
+                # Time already passed today → show smart time picker
+                context.user_data["pending"] = {
+                    "type": msg_type, "content": content,
+                    "recurring": recurring, "voice_text": voice_text,
+                }
+                try:
+                    suggestions = await llm.suggest_times(content)
+                except Exception:
+                    suggestions = llm._fallback_suggestions()
+                msg = f"השעה {due_time} כבר עברה היום.\nבחר מועד אחר:"
+                await update.effective_message.reply_text(msg, reply_markup=smart_time_keyboard(suggestions))
+                return
         except Exception:
             due_date = now.date().isoformat()  # fallback to today
 
