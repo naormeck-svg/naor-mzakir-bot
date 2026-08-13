@@ -51,6 +51,7 @@ Rules:
 - recurring ONLY if explicit: "every day", "every week", "weekly", "daily" — in Hebrew or English.
 - content should be clean, concise Hebrew (or mixed) text.
 - person: only for "agenda" and "chat_people_query" types, null otherwise.
+- Hebrew correction: always return `content` with correct Hebrew spelling and natural grammar. Fix typos silently (e.g. "פרוייקט" → "פרויקט", "נווהה" → "נועה"). Expand abbreviations by context ("פרוג'" → "פרויקט" or "פרוגרמה" based on context). Do not over-formalize casual speech. For `person` names, use the most common correct spelling.
 - Examples:
   - "רוצה לדבר עם נווה על הפרויקט" → {{"type":"agenda","content":"הפרויקט","person":"נווה","date":null,"time":null,"recurring":null}}
   - "תזכיר לי לשאול את דוד על התקציב" → {{"type":"agenda","content":"התקציב","person":"דוד","date":null,"time":null,"recurring":null}}
