@@ -20,17 +20,16 @@ logger = logging.getLogger(__name__)
 TIPS = [
     "💡 מינימליזם לא אומר לחיות עם פחות — אלא לחיות עם מה שחשוב.",
     "💡 רשימה של 3 משימות חשובות ביום עדיפה על רשימה של 20.",
-    "💡 לǤני שאתה מוסיף משימה — שאל: מה קורה אם לא תעשה את זה?",
+    "💡 לפני שאתה מוסיף משימה — שאל: מה קורה אם לא תעשה את זה?",
     "💡 עשה משימה אחת עד הסוף לפני שאתה מתחיל הבאה.",
     "💡 כבה התראות. הן עולות לך ביותר ממה שאתה חושב.",
-    "💡 עשה את המשימה הקשה ביותר שאוונה בבוקר.",
-    "💡 תיבת הדואר הנכנס שלך היא רשימת העדיפויות של אחרים. שמונ על שלך.",
+    "💡 עשה את המשימה הקשה ביותר שלך בבוקר.",
+    "💡 תיבת הדואר הנכנס שלך היא רשימת העדיפויות של אחרים. שמור על שלך.",
     "💡 'מחר' הוא המקום שבו מתות רוב המשימות.",
-    "💡 פחות עדיף — בחר עמוק על פני שחב.",
-    "💡 הפסקה של 5 דקות כל שעה מגדילה שיכוז — לא מקטינה.",
+    "💡 פחות עדיף — בחר עמוק על פני רחב.",
+    "💡 הפסקה של 5 דקות כל שעה מגדילה ריכוז — לא מקטינה.",
 ]
 _tip_index = 0
-
 
 # ── Keyboards ──────────────────────────────────────────────────────────────────
 
@@ -41,7 +40,10 @@ def main_keyboard():
             InlineKeyboardButton("📅 היום", callback_data="cmd:today"),
         ],
         [
+            InlineKeyboardButton("👥 אנשים", callback_data="cmd:people"),
             InlineKeyboardButton("📤 ייצוא", callback_data="cmd:export"),
+        ],
+        [
             InlineKeyboardButton("❓ עזרה", callback_data="cmd:help"),
         ],
     ])
@@ -80,7 +82,6 @@ def reschedule_keyboard(item_id: int, suggestions: list):
         label = s.get("label", "?")
         dt = s.get("date", "")
         tm = s.get("time") or "none"
-        # callback: reschedule:ID|YYYY-MM-DD|HH:MM  (fits in 64 bytes for typical IDs)
         buttons.append([InlineKeyboardButton(f"📅 {label}", callback_data=f"reschedule:{item_id}|{dt}|{tm}")])
     buttons.append([
         InlineKeyboardButton("✅ בוצע", callback_data=f"done:{item_id}"),
@@ -88,6 +89,24 @@ def reschedule_keyboard(item_id: int, suggestions: list):
     ])
     return InlineKeyboardMarkup(buttons)
 
+def people_keyboard(people_list):
+    """Inline keyboard with one button per person with open agenda items."""
+    buttons = []
+    for name, count in people_list:
+        label = f"👤 {name} ({count})"
+        buttons.append([InlineKeyboardButton(label, callback_data=f"people_show:{name}")])
+    buttons.append([InlineKeyboardButton("🔙 חזור", callback_data="cmd:main")])
+    return InlineKeyboardMarkup(buttons)
+
+def person_items_keyboard(items, person):
+    """One ✅ button per agenda item; tapping marks it done."""
+    buttons = []
+    for row in items:
+        item_id = row[0]
+        content = row[3][:35] + ("…" if len(row[3]) > 35 else "")
+        buttons.append([InlineKeyboardButton(f"✅ {content}", callback_data=f"people_done:{item_id}")])
+    buttons.append([InlineKeyboardButton("🔙 רשימת אנשים", callback_data="cmd:people")])
+    return InlineKeyboardMarkup(buttons)
 
 # ── Command handlers ───────────────────────────────────────────────────────────
 
@@ -108,6 +127,7 @@ async def help_cmd(update, context):
         "פקודות:\n"
         "/list — משימות פתוחות\n"
         "/today — משימות להיום\n"
+        "/people — אנשים עם נושאים\n"
         "/notes — הערות שמורות\n"
         "/reminders — תזכורות פעילות\n"
         "/focus — המיקוד של היום\n"
@@ -221,7 +241,7 @@ async def history_cmd(update, context):
     recent = list(items)[-20:]
     text = "✅ *בוצע לאחרונה:*\n\n"
     for row in recent:
-        emoji = {"task": "✅", "note": "📝", "reminder": "⏰"}.get(row[2], "•")
+        emoji = {"task": "✅", "note": "📝", "reminder": "⏰", "agenda": "👤"}.get(row[2], "•")
         text += f"{emoji} {row[3]}\n"
     await update.effective_message.reply_text(text, parse_mode="Markdown", reply_markup=main_keyboard())
 
@@ -246,6 +266,22 @@ async def export_cmd(update, context):
         caption="הנה כל הנתונים שלך 📊",
     )
 
+async def people_cmd(update, context):
+    """Show list of people with pending agenda items."""
+    chat_id = update.effective_chat.id
+    people = db.get_people(chat_id)
+    if not people:
+        await update.effective_message.reply_text(
+            "אין אנשים עם נושאים ממתינים 👥\n\n"
+            "כדי להוסיף: 'רוצה לדבר עם [שם] על [נושא]'",
+            reply_markup=main_keyboard(),
+        )
+        return
+    await update.effective_message.reply_text(
+        "👥 *אנשים עם נושאים:*\n\nבחר אדם:",
+        parse_mode="Markdown",
+        reply_markup=people_keyboard(people),
+    )
 
 # ── Message handlers ───────────────────────────────────────────────────────────
 
@@ -258,6 +294,8 @@ async def handle_text(update, context):
         return await today_cmd(update, context)
     if text in ("/export", "ייצוא"):
         return await export_cmd(update, context)
+    if text in ("/people", "אנשים"):
+        return await people_cmd(update, context)
     await _process_content(update, chat_id, text, context=context)
 
 async def handle_voice(update, context):
@@ -307,6 +345,69 @@ async def _process_content(update, chat_id, text, voice_text=None, context=None)
     due_time = result.get("time")
     recurring = result.get("recurring")
 
+    # ── Agenda item: something to discuss with a named person ──
+    if msg_type == "agenda":
+        person = (result.get("person") or "").strip()
+        if not person:
+            item_id = db.save_item(chat_id, "note", content)
+            await update.message.reply_text(
+                f"📝 שמרתי: *{content}*",
+                parse_mode="Markdown",
+                reply_markup=main_keyboard(),
+            )
+            return
+        similar = db.find_similar_person(chat_id, person)
+        if similar:
+            context.user_data["pending_agenda"] = {
+                "content": content, "person": person, "similar": similar
+            }
+            keyboard = InlineKeyboardMarkup([[
+                InlineKeyboardButton("כן, אחד הם", callback_data="people_merge_yes"),
+                InlineKeyboardButton("לא, אדם אחר", callback_data="people_merge_no"),
+            ]])
+            await update.message.reply_text(
+                f"האם *{person}* הוא אותו אדם כמו *{similar}*?",
+                parse_mode="Markdown",
+                reply_markup=keyboard,
+            )
+            return
+        item_id = db.save_item(chat_id, "agenda", content, person=person)
+        await update.message.reply_text(
+            f"👤 *{person}* — {content}\n\nנשמר לאג'נדה!",
+            parse_mode="Markdown",
+            reply_markup=save_confirm_keyboard(item_id, "agenda"),
+        )
+        return
+
+    # ── People query: "מה רציתי לדבר עם X?" ──
+    if msg_type == "chat_people_query":
+        person = (result.get("person") or "").strip()
+        if not person:
+            reply = await llm.chat(text)
+            await update.message.reply_text(reply, reply_markup=main_keyboard())
+            return
+        items = db.get_items_by_person(chat_id, person)
+        if not items:
+            similar = db.find_similar_person(chat_id, person)
+            if similar:
+                items = db.get_items_by_person(chat_id, similar)
+                person = similar
+        if not items:
+            await update.message.reply_text(
+                f"אין נושאים ממתינים עם {person} 🎉",
+                reply_markup=main_keyboard(),
+            )
+            return
+        msg_text = f"👤 *{person}:*\n\n"
+        for row in items:
+            msg_text += f"• {row[3]}\n"
+        await update.message.reply_text(
+            msg_text,
+            parse_mode="Markdown",
+            reply_markup=person_items_keyboard(items, person),
+        )
+        return
+
     if msg_type == "chat":
         data_keywords = ["משימות", "תזכורות", "היום", "כמה", "יש לי", "הערות", "פתוחות", "רשימה", "מה יש"]
         if any(kw in text for kw in data_keywords):
@@ -334,17 +435,14 @@ async def _process_content(update, chat_id, text, voice_text=None, context=None)
         await update.message.reply_text(reply, reply_markup=main_keyboard())
         return
 
-    # Ask for timing with 3 smart suggestions
-    # Auto-set today for tasks if time was given but no date
     if msg_type in ("task", "reminder") and due_time and not due_date:
         now = _now()
         try:
             hour, minute = map(int, due_time.split(":"))
             today_dt = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
             if today_dt > now:
-                due_date = now.date().isoformat()  # time is still future today
+                due_date = now.date().isoformat()
             else:
-                # Time already passed today → show smart time picker
                 context.user_data["pending"] = {
                     "type": msg_type, "content": content,
                     "recurring": recurring, "voice_text": voice_text,
@@ -357,9 +455,8 @@ async def _process_content(update, chat_id, text, voice_text=None, context=None)
                 await update.effective_message.reply_text(msg, reply_markup=smart_time_keyboard(suggestions))
                 return
         except Exception:
-            due_date = now.date().isoformat()  # fallback to today
+            due_date = now.date().isoformat()
 
-    # Show picker: task needs a date; reminder needs both date and time
     if (msg_type == "task" and not due_date) or (msg_type == "reminder" and not due_date and not due_time):
         if context is not None:
             context.user_data["pending"] = {
@@ -383,7 +480,7 @@ async def _process_content(update, chat_id, text, voice_text=None, context=None)
 
 async def _save_and_confirm(update, chat_id, msg_type, content, due_date, due_time, recurring, voice_text=None):
     item_id = db.save_item(chat_id, msg_type, content, due_date, due_time, recurring)
-    emoji = {"task": "✅", "note": "📝", "reminder": "⏰"}.get(msg_type, "💾")
+    emoji = {"task": "✅", "note": "📝", "reminder": "⏰", "agenda": "👤"}.get(msg_type, "💾")
     details = ""
     if voice_text and voice_text != content:
         details += f"\n🎤 _{voice_text}_"
@@ -404,7 +501,6 @@ async def _save_and_confirm(update, chat_id, msg_type, content, due_date, due_ti
         reply_markup=save_confirm_keyboard(item_id, msg_type),
     )
 
-
 # ── Callback query handler ─────────────────────────────────────────────────────
 
 async def handle_callback(update, context):
@@ -413,15 +509,45 @@ async def handle_callback(update, context):
     data = query.data
     chat_id = update.effective_chat.id
 
-    if data == "cmd:list":   return await list_cmd(update, context)
-    if data == "cmd:today":  return await today_cmd(update, context)
+    if data == "cmd:list": return await list_cmd(update, context)
+    if data == "cmd:today": return await today_cmd(update, context)
     if data == "cmd:export": return await export_cmd(update, context)
-    if data == "cmd:help":   return await help_cmd(update, context)
+    if data == "cmd:help": return await help_cmd(update, context)
+    if data == "cmd:people": return await people_cmd(update, context)
     if data == "cmd:main":
         await query.edit_message_text("תפריט ראשי:", reply_markup=main_keyboard())
         return
     if data == "clear_cancel":
         await query.edit_message_text("ביטול. לא נמחק כלום.", reply_markup=main_keyboard())
+        return
+    if data == "noop":
+        return
+
+    # ── People deduplication answers ──
+    if data == "people_merge_yes":
+        pending = context.user_data.pop("pending_agenda", None)
+        if not pending:
+            await query.edit_message_text("לא נמצא פריט ממתין.", reply_markup=main_keyboard())
+            return
+        item_id = db.save_item(chat_id, "agenda", pending["content"], person=pending["similar"])
+        await query.edit_message_text(
+            f"👤 נשמר תחת *{pending['similar']}*: {pending['content']}",
+            parse_mode="Markdown",
+            reply_markup=save_confirm_keyboard(item_id, "agenda"),
+        )
+        return
+
+    if data == "people_merge_no":
+        pending = context.user_data.pop("pending_agenda", None)
+        if not pending:
+            await query.edit_message_text("לא נמצא פריט ממתין.", reply_markup=main_keyboard())
+            return
+        item_id = db.save_item(chat_id, "agenda", pending["content"], person=pending["person"])
+        await query.edit_message_text(
+            f"👤 נשמר תחת *{pending['person']}*: {pending['content']}",
+            parse_mode="Markdown",
+            reply_markup=save_confirm_keyboard(item_id, "agenda"),
+        )
         return
 
     parts = data.split(":", 1)
@@ -429,7 +555,6 @@ async def handle_callback(update, context):
         return
     action, param = parts
 
-    # ── New item: smart date+time selection ──
     if action == "setdatetime":
         pending = context.user_data.get("pending")
         if not pending:
@@ -455,9 +580,7 @@ async def handle_callback(update, context):
         )
         return
 
-    # ── Existing item: reschedule to new future time ──
     if action == "reschedule":
-        # param format: "ID|YYYY-MM-DD|HH:MM"
         rp = param.split("|", 2)
         if len(rp) < 2:
             return
@@ -484,7 +607,6 @@ async def handle_callback(update, context):
         )
         return
 
-    # ── Cancel item (mark done / dismiss) ──
     if action == "cancel_item":
         try:
             item_id = int(param)
@@ -492,6 +614,55 @@ async def handle_callback(update, context):
             return
         db.mark_done(item_id)
         await query.edit_message_text("🗑 משימה בוטלה.", reply_markup=main_keyboard())
+        return
+
+    if action == "people_show":
+        person = param
+        items = db.get_items_by_person(chat_id, person)
+        if not items:
+            await query.edit_message_text(
+                f"אין נושאים פתוחים עם {person} 🎉",
+                reply_markup=people_keyboard(db.get_people(chat_id)),
+            )
+            return
+        msg_text = f"👤 *{person}:*\n\n"
+        for row in items:
+            msg_text += f"• {row[3]}\n"
+        await query.edit_message_text(
+            msg_text,
+            parse_mode="Markdown",
+            reply_markup=person_items_keyboard(items, person),
+        )
+        return
+
+    if action == "people_done":
+        try:
+            item_id = int(param)
+        except ValueError:
+            return
+        conn = db.get_conn()
+        row = conn.execute("SELECT person FROM items WHERE id=?", (item_id,)).fetchone()
+        person = row[0] if row else None
+        db.mark_done(item_id)
+        if person:
+            remaining = db.get_items_by_person(chat_id, person)
+            if remaining:
+                msg_text = f"✅ סומן כבוצע!\n\n👤 *{person}:*\n\n" + "".join(f"• {r[3]}\n" for r in remaining)
+                await query.edit_message_text(
+                    msg_text,
+                    parse_mode="Markdown",
+                    reply_markup=person_items_keyboard(remaining, person),
+                )
+                return
+        people = db.get_people(chat_id)
+        if people:
+            await query.edit_message_text(
+                "✅ סומן כבוצע!\n\n👥 *אנשים עם נושאים:*",
+                parse_mode="Markdown",
+                reply_markup=people_keyboard(people),
+            )
+        else:
+            await query.edit_message_text("✅ סומן כבוצע! אין עוד נושאים ממתינים 🎉", reply_markup=main_keyboard())
         return
 
     try:
@@ -503,7 +674,6 @@ async def handle_callback(update, context):
         db.mark_done(item_id)
         await query.edit_message_text("✅ סומן כבוצע!", reply_markup=main_keyboard())
     elif action == "delete":
-        # Show confirmation before deleting
         keyboard = InlineKeyboardMarkup([
             [InlineKeyboardButton("🔴 כן, מחק", callback_data=f"delete_confirm:{item_id}"),
              InlineKeyboardButton("❌ ביטול", callback_data=f"saved:{item_id}")],
@@ -556,7 +726,6 @@ async def handle_callback(update, context):
         await query.edit_message_text(f"✅ נמחקו {deleted} {type_label}.", reply_markup=main_keyboard())
     elif action == "saved":
         await query.answer("כבר נשמר ✓", show_alert=False)
-
 
 async def clear_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Full bot reset — straight to delete all with 2 confirmations."""
