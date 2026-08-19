@@ -343,7 +343,8 @@ async def handle_photo(update, context):
 async def _process_content(update, chat_id, text, voice_text=None, context=None):
     try:
         result = await llm.classify(text)
-        logger.info(f"Classify: type={result.get(\"type\")}, content={str(result.get(\"content\",\"\"))[:40]}")
+        _ct = result.get('type'); _cc = str(result.get('content',''))[:40]
+        logger.info(f"Classify: type={_ct}, content={_cc}")
     except Exception as e:
         logger.error(f"Classification error: {e}")
         await update.message.reply_text("אופס, שגיאה. נסה שוב.", reply_markup=main_keyboard())
