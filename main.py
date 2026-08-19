@@ -54,6 +54,10 @@ async def post_shutdown(app: Application):
     if scheduler:
         scheduler.shutdown()
 
+async def error_handler(update, context):
+    logger.exception("Unhandled exception", exc_info=context.error)
+
+
 def main():
     app = (
         Application.builder()
@@ -88,6 +92,7 @@ def main():
 
     # Inline button callbacks
     app.add_handler(CallbackQueryHandler(handlers.handle_callback))
+    app.add_error_handler(error_handler)
 
     logger.info("Bot starting with polling…")
     app.run_polling(drop_pending_updates=True)
