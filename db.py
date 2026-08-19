@@ -127,6 +127,14 @@ def init_db():
         conn.commit()
     except Exception:
         pass  # Column already exists
+    # user profiles table
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS user_profiles (
+            chat_id INTEGER PRIMARY KEY,
+            name TEXT
+        )
+    """)
+    conn.commit()
 
 
 def save_item(chat_id, type_, content, due_date=None, due_time=None, recurring=None, person=None):
@@ -348,5 +356,24 @@ def merge_person(chat_id, old_name, new_name):
     conn.execute(
         "UPDATE items SET person=? WHERE chat_id=? AND person=?",
         (new_name, chat_id, old_name)
+    )
+    conn.commit()
+
+
+def get_user_name(chat_id):
+    """Return stored first name for this chat, or None."""
+    conn = get_conn()
+    row = conn.execute(
+        "SELECT name FROM user_profiles WHERE chat_id=?", (chat_id,)
+    ).fetchone()
+    return row[0] if row else None
+
+
+def set_user_name(chat_id, name):
+    """Store the user's first name."""
+    conn = get_conn()
+    conn.execute(
+        "INSERT OR REPLACE INTO user_profiles (chat_id, name) VALUES (?, ?)",
+        (chat_id, name)
     )
     conn.commit()
