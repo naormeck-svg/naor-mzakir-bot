@@ -1,7 +1,7 @@
 """
 All Telegram bot handlers.
 """
-import io
+import ioh
 import csv
 import logging
 from datetime import datetime, date, timedelta
@@ -118,7 +118,7 @@ def person_items_keyboard(items, person):
 # ── Command handlers ───────────────────────────────────────────────────────────
 
 async def start(update, context):
-    await update.message.reply_text(
+    await update.effective_message.reply_text(
         "שלום! אני המזכיר שלך 🤖\n\n"
         "שלח לי קול, טקסט או תמונה — אשמור הכל מייד.\n"
         "לא צריך לבקש ממני לשמור, זה קורה אוטומטית.",
@@ -312,12 +312,12 @@ async def handle_voice(update, context):
     voice = update.message.voice
     file = await context.bot.get_file(voice.file_id)
     audio_bytes = bytes(await file.download_as_bytearray())
-    await update.message.reply_text("🎤 מתמלל…")
+    await update.effective_message.reply_text("🎤 מתמלל…")
     try:
         text = await llm.transcribe(audio_bytes, "audio.ogg")
     except Exception as e:
         logger.error(f"Transcription error: {e}")
-        await update.message.reply_text("לא הצלחתי לתמלל. נסה שוב.", reply_markup=main_keyboard())
+        await update.effective_message.reply_text("לא הצלחתי לתמלל. נסה שוב.", reply_markup=main_keyboard())
         return
     await _process_content(update, chat_id, text, voice_text=text, context=context)
 
@@ -326,15 +326,15 @@ async def handle_photo(update, context):
     photo = update.message.photo[-1]
     file = await context.bot.get_file(photo.file_id)
     image_bytes = bytes(await file.download_as_bytearray())
-    await update.message.reply_text("🖼 מנתח תמונה…")
+    await update.effective_message.reply_text("🖼 מנתח תמונה…")
     try:
         description = await llm.describe_image(image_bytes)
     except Exception as e:
         logger.error(f"Vision error: {e}")
-        await update.message.reply_text("לא הצלחתי לנתח את התמונה.", reply_markup=main_keyboard())
+        await update.effective_message.reply_text("לא הצלחתי לנתח את התמונה.", reply_markup=main_keyboard())
         return
     item_id = db.save_item(chat_id, "note", f"[תמונה] {description}")
-    await update.message.reply_text(
+    await update.effective_message.reply_text(
         f"📝 שמרתי:\n_{description}_",
         parse_mode="Markdown",
         reply_markup=save_confirm_keyboard(item_id, "note"),
@@ -347,7 +347,7 @@ async def _process_content(update, chat_id, text, voice_text=None, context=None)
         logger.info(f"Classify: type={_ct}, content={_cc}")
     except Exception as e:
         logger.error(f"Classification error: {e}")
-        await update.message.reply_text("אופס, שגיאה. נסה שוב.", reply_markup=main_keyboard())
+        await update.effective_message.reply_text("אופס, שגיאה. נסה שוב.", reply_markup=main_keyboard())
         return
 
     msg_type = result.get("type", "note")
@@ -361,7 +361,7 @@ async def _process_content(update, chat_id, text, voice_text=None, context=None)
         person = (result.get("person") or "").strip()
         if not person:
             item_id = db.save_item(chat_id, "note", content)
-            await update.message.reply_text(
+            await update.effective_message.reply_text(
                 f"📝 שמרתי: *{content}*",
                 parse_mode="Markdown",
                 reply_markup=main_keyboard(),
@@ -376,14 +376,14 @@ async def _process_content(update, chat_id, text, voice_text=None, context=None)
                 InlineKeyboardButton("כן, אחד הם", callback_data="people_merge_yes"),
                 InlineKeyboardButton("לא, אדם אחר", callback_data="people_merge_no"),
             ]])
-            await update.message.reply_text(
+            await update.effective_message.reply_text(
                 f"האם *{person}* הוא אותו אדם כמו *{similar}*?",
                 parse_mode="Markdown",
                 reply_markup=keyboard,
             )
             return
         item_id = db.save_item(chat_id, "agenda", content, person=person)
-        await update.message.reply_text(
+        await update.effective_message.reply_text(
             f"👤 *{person}* — {content}\n\nנשמר לאג'נדה!",
             parse_mode="Markdown",
             reply_markup=save_confirm_keyboard(item_id, "agenda"),
@@ -395,7 +395,7 @@ async def _process_content(update, chat_id, text, voice_text=None, context=None)
         person = (result.get("person") or "").strip()
         if not person:
             reply = await llm.chat(text)
-            await update.message.reply_text(reply, reply_markup=main_keyboard())
+            await update.effective_message.reply_text(reply, reply_markup=main_keyboard())
             return
         items = db.get_items_by_person(chat_id, person)
         if not items:
@@ -404,7 +404,7 @@ async def _process_content(update, chat_id, text, voice_text=None, context=None)
                 items = db.get_items_by_person(chat_id, similar)
                 person = similar
         if not items:
-            await update.message.reply_text(
+            await update.effective_message.reply_text(
                 f"אין נושאים ממתינים עם {person} 🎉",
                 reply_markup=main_keyboard(),
             )
@@ -412,7 +412,7 @@ async def _process_content(update, chat_id, text, voice_text=None, context=None)
         msg_text = f"👤 *{person}:*\n\n"
         for row in items:
             msg_text += f"• {row[3]}\n"
-        await update.message.reply_text(
+        await update.effective_message.reply_text(
             msg_text,
             parse_mode="Markdown",
             reply_markup=person_items_keyboard(items, person),
@@ -443,7 +443,7 @@ async def _process_content(update, chat_id, text, voice_text=None, context=None)
             except Exception as e:
                 logger.error(f"Chat error: {e}")
                 reply = "לא הצלחתי לענות, נסה שוב."
-        await update.message.reply_text(reply, reply_markup=main_keyboard())
+        await update.effective_message.reply_text(reply, reply_markup=main_keyboard())
         return
 
     if msg_type in ("task", "reminder") and due_time and not due_date:
@@ -475,12 +475,12 @@ async def _process_content(update, chat_id, text, voice_text=None, context=None)
                 "recurring": recurring, "voice_text": voice_text,
             }
         emoji = "✅" if msg_type == "task" else "⏰"
-        await update.message.reply_text("⏳ חושב על מועדים…")
+        await update.effective_message.reply_text("⏳ חושב על מועדים…")
         try:
             suggestions = await llm.suggest_times(content)
         except Exception:
             suggestions = llm._fallback_suggestions()
-        await update.message.reply_text(
+        await update.effective_message.reply_text(
             f"{emoji} *{content}*\n\nמתי להזכיר לך?",
             parse_mode="Markdown",
             reply_markup=smart_time_keyboard(suggestions),
