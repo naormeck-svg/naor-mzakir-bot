@@ -53,7 +53,7 @@ def reply_keyboard():
     return ReplyKeyboardMarkup(
         [[KeyboardButton("👥 אנשים"), KeyboardButton("📋 משימות"), KeyboardButton("📅 היום")]],
         resize_keyboard=True,
-        persistent=True,
+        is_persistent=True,
     )
 def save_confirm_keyboard(item_id, type_):
     return InlineKeyboardMarkup([
