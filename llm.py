@@ -38,14 +38,15 @@ Output format:
 
 Rules:
 - "task": something to do. Extract date/time if mentioned.
-- "reminder": something to remember at a specific time/date. Always has date or time.
+- "reminder": something to remember at a specific time/date. Always has date or time. PRIORITY: if the message starts with or contains "תזכורת" or "תזכיר לי", ALWAYS classify as "reminder" — this overrides all other rules including infinitive detection.
 - "note": a thought, idea, or information to save. No action required.
 - "agenda": something the user wants to discuss with or ask a specific named person. Set person to their name, content to the topic only (without the person's name).
 - "chat_people_query": user asks what they wanted to discuss with a specific person. Set person to their name.
 - "chat": casual conversation, question, or greeting — do NOT save, just respond.
 - Handle Hebrew-English code-switching naturally.
 - Resolve relative dates using the date context below.
-- Infinitive phrases (lamed+verb in Hebrew: to-buy, to-send, to-check, etc.) = task.
+- Israeli time format: "X.5" or "X וחצי" means X:30 (e.g., "4.5" = 04:30, "4.5 אחרי הצהריים" = 16:30, "6.5 בערב" = 18:30). Always convert to HH:MM format.
+- Infinitive phrases (lamed+verb in Hebrew: to-buy, to-send, to-check, etc.) = task, UNLESS the message contains "תזכורת" or "תזכיר לי" — in that case = reminder.
 - Past references ("last week", "yesterday", "X days ago" in Hebrew) = note, NOT recurring.
 - "ביום שני" when today is Monday means NEXT Monday, not today.
 - recurring ONLY if explicit: "every day", "every week", "weekly", "daily" — in Hebrew or English.
