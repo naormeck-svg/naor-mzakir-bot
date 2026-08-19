@@ -38,6 +38,7 @@ def main_keyboard():
         [
             InlineKeyboardButton("📋 משימות", callback_data="cmd:list"),
             InlineKeyboardButton("📅 היום", callback_data="cmd:today"),
+            InlineKeyboardButton("📅 מחר", callback_data="cmd:tomorrow"),
         ],
         [
             InlineKeyboardButton("👥 אנשים", callback_data="cmd:people"),
@@ -183,6 +184,22 @@ async def today_cmd(update, context):
         text += f"{emoji} {row[3]}{time_str}\n"
     await update.effective_message.reply_text(text, parse_mode="Markdown", reply_markup=task_list_keyboard(items))
 
+async def tomorrow_cmd(update, context):
+    chat_id = update.effective_chat.id
+    tomorrow = date.today() + timedelta(days=1)
+    items = db.get_tomorrow_items(chat_id)
+    if not items:
+        await update.effective_message.reply_text(
+            "אין פריטים למחר 🎉", reply_markup=main_keyboard()
+        )
+        return
+    text = f"📅 *מחר — {'{'}tomorrow.strftime('%d/%m/%Y'){'}'}:*\n\n"
+    for row in items:
+        emoji = {"task": "☐", "note": "📝", "reminder": "⏰"}.get(row[2], "•")
+        time_str = f" {'{'}row[5]{'}'}" if row[5] else ""
+        text += f"{'{'}emoji{'}'} {'{'}row[3]{'}'}{'{'}time_str{'}'}\n"
+    await update.effective_message.reply_text(text, parse_mode="Markdown", reply_markup=task_list_keyboard(items))
+
 async def notes_cmd(update, context):
     chat_id = update.effective_chat.id
     items = db.get_items(chat_id, type_="note", done=0)
@@ -318,6 +335,8 @@ async def handle_text(update, context):
         return await list_cmd(update, context)
     if text in ("/today", "היום", "📅 היום"):
         return await today_cmd(update, context)
+    if text in ("/tomorrow", "מחר", "📅 מחר"):
+        return await tomorrow_cmd(update, context)
     if text in ("/export", "ייצוא"):
         return await export_cmd(update, context)
     if text in ("/people", "אנשים", "👥 אנשים"):
@@ -540,6 +559,7 @@ async def handle_callback(update, context):
 
     if data == "cmd:list": return await list_cmd(update, context)
     if data == "cmd:today": return await today_cmd(update, context)
+    if data == "cmd:tomorrow": return await tomorrow_cmd(update, context)
     if data == "cmd:export": return await export_cmd(update, context)
     if data == "cmd:help": return await help_cmd(update, context)
     if data == "cmd:people": return await people_cmd(update, context)
