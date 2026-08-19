@@ -295,6 +295,7 @@ async def people_cmd(update, context):
 async def handle_text(update, context):
     text = update.message.text.strip()
     chat_id = update.effective_chat.id
+    logger.info(f"TEXT from {chat_id}: {text[:60]}")
     if text in ("/list", "רשימה", "📋 משימות"):
         return await list_cmd(update, context)
     if text in ("/today", "היום", "📅 היום"):
@@ -307,6 +308,7 @@ async def handle_text(update, context):
 
 async def handle_voice(update, context):
     chat_id = update.effective_chat.id
+    logger.info(f"VOICE from {chat_id}")
     voice = update.message.voice
     file = await context.bot.get_file(voice.file_id)
     audio_bytes = bytes(await file.download_as_bytearray())
@@ -341,6 +343,7 @@ async def handle_photo(update, context):
 async def _process_content(update, chat_id, text, voice_text=None, context=None):
     try:
         result = await llm.classify(text)
+        logger.info(f"Classify: type={result.get(\"type\")}, content={str(result.get(\"content\",\"\"))[:40]}")
     except Exception as e:
         logger.error(f"Classification error: {e}")
         await update.message.reply_text("אופס, שגיאה. נסה שוב.", reply_markup=main_keyboard())
