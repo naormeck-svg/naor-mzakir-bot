@@ -189,15 +189,13 @@ async def tomorrow_cmd(update, context):
     tomorrow = date.today() + timedelta(days=1)
     items = db.get_tomorrow_items(chat_id)
     if not items:
-        await update.effective_message.reply_text(
-            "אין פריטים למחר 🎉", reply_markup=main_keyboard()
-        )
+        await update.effective_message.reply_text("אין פריטים למחר 🎉", reply_markup=main_keyboard())
         return
-    text = f"📅 *מחר — {'{'}tomorrow.strftime('%d/%m/%Y'){'}'}:*\n\n"
+    text = f"📅 *מחר — {tomorrow.strftime('%d/%m/%Y')}:*\n\n"
     for row in items:
         emoji = {"task": "☐", "note": "📝", "reminder": "⏰"}.get(row[2], "•")
-        time_str = f" {'{'}row[5]{'}'}" if row[5] else ""
-        text += f"{'{'}emoji{'}'} {'{'}row[3]{'}'}{'{'}time_str{'}'}\n"
+        time_str = f" {row[5]}" if row[5] else ""
+        text += f"{emoji} {row[3]}{time_str}\n"
     await update.effective_message.reply_text(text, parse_mode="Markdown", reply_markup=task_list_keyboard(items))
 
 async def notes_cmd(update, context):
