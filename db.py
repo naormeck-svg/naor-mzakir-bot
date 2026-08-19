@@ -5,7 +5,7 @@ import httpx
 from datetime import datetime, date, timedelta
 from config import TURSO_DATABASE_URL, TURSO_AUTH_TOKEN
 
-
+# Convert libsql:// URL to https:// for HTTP API
 def _http_url():
     url = TURSO_DATABASE_URL
     for prefix in ("libsql://", "wss://", "ws://"):
@@ -40,6 +40,7 @@ def _from_cell(cell):
 
 
 def _run(sql, params=()):
+    """Execute a single SQL statement via Turso HTTP API. Returns (rows, lastrowid)."""
     payload = {
         "requests": [
             {
@@ -63,15 +64,19 @@ def _run(sql, params=()):
     )
     resp.raise_for_status()
     data = resp.json()
+
     result_entry = data["results"][0]
     if result_entry.get("type") == "error":
         raise RuntimeError(result_entry["error"]["message"])
+
     result = result_entry["response"]["result"]
     raw_rows = result.get("rows", [])
     rows = [tuple(_from_cell(cell) for cell in row) for row in raw_rows]
     last_id = result.get("last_insert_rowid")
     return rows, (int(last_id) if last_id is not None else None)
 
+
+# --- Minimal cursor/connection shim so callers don't need to change ---
 
 class _Cursor:
     def __init__(self, rows, lastrowid):
@@ -91,7 +96,7 @@ class _Conn:
         return _Cursor(rows, lastrowid)
 
     def commit(self):
-        pass
+        pass  # HTTP API auto-commits each statement
 
 
 _conn = None
@@ -121,46 +126,35 @@ def init_db():
         )
     """)
     conn.commit()
-    # Add person column if not yet present (idempotent migration)
-    try:
-        conn.execute("ALTER TABLE items ADD COLUMN person TEXT")
-        conn.commit()
-    except Exception:
-        pass  # Column already exists
-    # user profiles table
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS user_profiles (
-            chat_id INTEGER PRIMARY KEY,
-            name TEXT
-        )
-    """)
-    conn.commit()
 
 
-def save_item(chat_id, type_, content, due_date=None, due_time=None, recurring=None, person=None):
+def save_item(chat_id: int, type_: str, content: str,
+              due_date: str = None, due_time: str = None, recurring: str = None) -> int:
     conn = get_conn()
     cur = conn.execute(
-        "INSERT INTO items (chat_id, type, content, due_date, due_time, recurring, person) VALUES (?,?,?,?,?,?,?)",
-        (chat_id, type_, content, due_date, due_time, recurring, person)
+        "INSERT INTO items (chat_id, type, content, due_date, due_time, recurring) VALUES (?,?,?,?,?,?)",
+        (chat_id, type_, content, due_date, due_time, recurring)
     )
     conn.commit()
     return cur.lastrowid
 
 
-def get_items(chat_id, type_=None, done=0):
+def get_items(chat_id: int, type_: str = None, done: int = 0):
     conn = get_conn()
     if type_:
-        return conn.execute(
+        rows = conn.execute(
             "SELECT * FROM items WHERE chat_id=? AND type=? AND done=? ORDER BY due_date, due_time",
             (chat_id, type_, done)
         ).fetchall()
-    return conn.execute(
-        "SELECT * FROM items WHERE chat_id=? AND done=? ORDER BY type, due_date, due_time",
-        (chat_id, done)
-    ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT * FROM items WHERE chat_id=? AND done=? ORDER BY type, due_date, due_time",
+            (chat_id, done)
+        ).fetchall()
+    return rows
 
 
-def get_today_items(chat_id):
+def get_today_items(chat_id: int):
     today = date.today().isoformat()
     conn = get_conn()
     return conn.execute(
@@ -169,14 +163,27 @@ def get_today_items(chat_id):
     ).fetchall()
 
 
-def mark_done(item_id):
+def get_tomorrow_items(chat_id: int):
+    tomorrow = (date.today() + timedelta(days=1)).isoformat()
+    conn = get_conn()
+    return conn.execute(
+        "SELECT * FROM items WHERE chat_id=? AND due_date=? AND done=0 ORDER BY due_time",
+        (chat_id, tomorrow)
+    ).fetchall()
+
+
+def mark_done(item_id: int):
     conn = get_conn()
     conn.execute("UPDATE items SET done=1 WHERE id=?", (item_id,))
     conn.commit()
 
 
-def snooze_item(item_id, hours=1):
+def snooze_item(item_id: int, hours: int = 1):
+    """Snooze by N hours from now."""
     conn = get_conn()
+    row = conn.execute("SELECT due_date, due_time FROM items WHERE id=?", (item_id,)).fetchone()
+    if not row:
+        return
     now = datetime.now()
     new_dt = now + timedelta(hours=hours)
     conn.execute(
@@ -186,33 +193,40 @@ def snooze_item(item_id, hours=1):
     conn.commit()
 
 
-def postpone_to_tomorrow(item_id):
+def postpone_to_tomorrow(item_id: int):
     conn = get_conn()
     tomorrow = (date.today() + timedelta(days=1)).isoformat()
-    conn.execute("UPDATE items SET due_date=?, reminded_at=NULL WHERE id=?", (tomorrow, item_id))
+    conn.execute(
+        "UPDATE items SET due_date=?, reminded_at=NULL WHERE id=?",
+        (tomorrow, item_id)
+    )
     conn.commit()
 
 
 def get_due_reminders():
+    """Return items due now (within the current minute) that haven't been reminded yet."""
     conn = get_conn()
     now = datetime.now()
     today = now.date().isoformat()
     current_time = now.strftime("%H:%M")
     return conn.execute(
         """SELECT * FROM items WHERE type='reminder' AND done=0
-        AND due_date <= ? AND (due_time IS NULL OR due_time <= ?)
-        AND (reminded_at IS NULL OR reminded_at < date('now', '-23 hours'))""",
+           AND due_date <= ? AND (due_time IS NULL OR due_time <= ?)
+           AND (reminded_at IS NULL OR reminded_at < date('now', '-23 hours'))""",
         (today, current_time)
     ).fetchall()
 
 
-def mark_reminded(item_id):
+def mark_reminded(item_id: int):
     conn = get_conn()
-    conn.execute("UPDATE items SET reminded_at=datetime('now') WHERE id=?", (item_id,))
+    conn.execute(
+        "UPDATE items SET reminded_at=datetime('now') WHERE id=?", (item_id,)
+    )
     conn.commit()
 
 
-def handle_recurring(item_id):
+def handle_recurring(item_id: int):
+    """After a recurring reminder fires, schedule next occurrence."""
     conn = get_conn()
     row = conn.execute("SELECT * FROM items WHERE id=?", (item_id,)).fetchone()
     if not row:
@@ -247,7 +261,7 @@ def get_all_chat_ids():
     return [r[0] for r in rows]
 
 
-def get_summary_for_digest(chat_id):
+def get_summary_for_digest(chat_id: int):
     today = date.today().isoformat()
     conn = get_conn()
     tasks_today = conn.execute(
@@ -265,115 +279,9 @@ def get_summary_for_digest(chat_id):
     return tasks_today, reminders_today, overdue
 
 
-def export_all(chat_id):
+def export_all(chat_id: int):
     conn = get_conn()
     return conn.execute(
         "SELECT id, type, content, due_date, due_time, recurring, done, created_at FROM items WHERE chat_id=? ORDER BY created_at DESC",
         (chat_id,)
     ).fetchall()
-
-
-def count_items_by_type(chat_id: int, type_: str = None) -> int:
-    """Count open items by type (or all if type_ is None/all)."""
-    conn = get_conn()
-    if type_ is None or type_ == "all":
-        row = conn.execute(
-            "SELECT COUNT(*) FROM items WHERE chat_id=? AND done=0",
-            (chat_id,)
-        ).fetchone()
-    else:
-        row = conn.execute(
-            "SELECT COUNT(*) FROM items WHERE chat_id=? AND type=? AND done=0",
-            (chat_id, type_)
-        ).fetchone()
-    return row[0] if row else 0
-
-
-def delete_items_by_type(chat_id: int, type_: str = None) -> int:
-    """Delete open items by type. Returns count deleted."""
-    count = count_items_by_type(chat_id, type_)
-    conn = get_conn()
-    if type_ is None or type_ == "all":
-        conn.execute(
-            "DELETE FROM items WHERE chat_id=? AND done=0",
-            (chat_id,)
-        )
-    else:
-        conn.execute(
-            "DELETE FROM items WHERE chat_id=? AND type=? AND done=0",
-            (chat_id, type_)
-        )
-    return count
-
-
-def delete_item(item_id: int):
-    """Permanently delete a single item by ID."""
-    conn = get_conn()
-    conn.execute("DELETE FROM items WHERE id=?", (item_id,))
-
-
-# ── People Agenda ──────────────────────────────────────────────
-
-def get_people(chat_id):
-    """Return list of (person_name, count) for persons with open agenda items."""
-    conn = get_conn()
-    return conn.execute(
-        "SELECT person, COUNT(*) FROM items WHERE chat_id=? AND type='agenda' AND person IS NOT NULL AND done=0 GROUP BY person ORDER BY person",
-        (chat_id,)
-    ).fetchall()
-
-
-def get_items_by_person(chat_id, person):
-    """Return open agenda items for a specific person."""
-    conn = get_conn()
-    return conn.execute(
-        "SELECT * FROM items WHERE chat_id=? AND type='agenda' AND person=? AND done=0 ORDER BY created_at",
-        (chat_id, person)
-    ).fetchall()
-
-
-def find_similar_person(chat_id, name):
-    """Return an existing person name if a similar (but not identical) one exists, else None."""
-    conn = get_conn()
-    rows = conn.execute(
-        "SELECT DISTINCT person FROM items WHERE chat_id=? AND person IS NOT NULL",
-        (chat_id,)
-    ).fetchall()
-    name_lower = name.strip().lower()
-    for row in rows:
-        existing = row[0]
-        existing_lower = existing.strip().lower()
-        if existing_lower == name_lower:
-            return None  # Exact match — no dedup question needed
-        if name_lower in existing_lower or existing_lower in name_lower:
-            return existing
-    return None
-
-
-def merge_person(chat_id, old_name, new_name):
-    """Rename all items from old_name to new_name for this chat."""
-    conn = get_conn()
-    conn.execute(
-        "UPDATE items SET person=? WHERE chat_id=? AND person=?",
-        (new_name, chat_id, old_name)
-    )
-    conn.commit()
-
-
-def get_user_name(chat_id):
-    """Return stored first name for this chat, or None."""
-    conn = get_conn()
-    row = conn.execute(
-        "SELECT name FROM user_profiles WHERE chat_id=?", (chat_id,)
-    ).fetchone()
-    return row[0] if row else None
-
-
-def set_user_name(chat_id, name):
-    """Store the user's first name."""
-    conn = get_conn()
-    conn.execute(
-        "INSERT OR REPLACE INTO user_profiles (chat_id, name) VALUES (?, ?)",
-        (chat_id, name)
-    )
-    conn.commit()
