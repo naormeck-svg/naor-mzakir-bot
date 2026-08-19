@@ -26,6 +26,7 @@ BOT_COMMANDS = [
     BotCommand("help", "עזרה ורשימת פקודות"),
     BotCommand("list", "משימות פתוחות"),
     BotCommand("today", "משימות להיום"),
+    BotCommand("tomorrow", "פריטים למחר"),
     BotCommand("people", "אנשים עם נושאים ממתינים"),
     BotCommand("notes", "הערות שמורות"),
     BotCommand("reminders", "תזכורות פעילות"),
@@ -72,6 +73,7 @@ def main():
     app.add_handler(CommandHandler("help", handlers.help_cmd))
     app.add_handler(CommandHandler("list", handlers.list_cmd))
     app.add_handler(CommandHandler("today", handlers.today_cmd))
+    app.add_handler(CommandHandler("tomorrow", handlers.tomorrow_cmd))
     app.add_handler(CommandHandler("export", handlers.export_cmd))
     app.add_handler(CommandHandler("clear", handlers.clear_cmd))
     app.add_handler(CommandHandler("menu", handlers.menu_cmd))
