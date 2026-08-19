@@ -118,12 +118,19 @@ def person_items_keyboard(items, person):
 # ── Command handlers ───────────────────────────────────────────────────────────
 
 async def start(update, context):
-    await update.effective_message.reply_text(
-        "שלום! אני המזכיר שלך 🤖\n\n"
-        "שלח לי קול, טקסט או תמונה — אשמור הכל מייד.\n"
-        "לא צריך לבקש ממני לשמור, זה קורה אוטומטית.",
-        reply_markup=reply_keyboard(),
-    )
+    chat_id = update.effective_chat.id
+    name = db.get_user_name(chat_id)
+    if name:
+        await update.effective_message.reply_text(
+            f"היי {name}! 👋 אני כאן ומוכן.\n"
+            "שלח לי קול, טקסט או תמונה — אשמור הכל מייד.",
+            reply_markup=reply_keyboard(),
+        )
+    else:
+        context.user_data['awaiting_name'] = True
+        await update.effective_message.reply_text(
+            "היי! אני המזכיר שלך 🤖\n\nלפני שמתחילים — איך קוראים לך?"
+        )
 
 async def help_cmd(update, context):
     await update.effective_message.reply_text(
@@ -293,9 +300,20 @@ async def people_cmd(update, context):
 # ── Message handlers ───────────────────────────────────────────────────────────
 
 async def handle_text(update, context):
-    text = update.message.text.strip()
+    text = update.effective_message.text.strip()
     chat_id = update.effective_chat.id
     logger.info(f"TEXT from {chat_id}: {text[:60]}")
+    # Name capture flow
+    if context.user_data.get('awaiting_name'):
+        name = text.strip().split()[0]  # take first word as first name
+        db.set_user_name(chat_id, name)
+        context.user_data['awaiting_name'] = False
+        await update.effective_message.reply_text(
+            f"נעים מאוד {name}! 🙌 מעכשיו אני מכיר אותך.\n"
+            "שלח לי קול, טקסט או תמונה — אשמור הכל מייד.",
+            reply_markup=reply_keyboard(),
+        )
+        return
     if text in ("/list", "רשימה", "📋 משימות"):
         return await list_cmd(update, context)
     if text in ("/today", "היום", "📅 היום"):
