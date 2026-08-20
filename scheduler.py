@@ -83,6 +83,48 @@ async def check_reminders(app):
             logger.error(f"Reminder send error for item {item_id}: {e}")
 
 
+async def check_overdue(app):
+    """Notify users about items past their due date, once per ~day."""
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    _TZ = ZoneInfo("Asia/Jerusalem")
+    now = datetime.now(_TZ)
+    weekday = now.weekday()
+    hour = now.hour
+    if weekday == 5:  # Saturday - quiet
+        return
+    elif weekday == 4:  # Friday 09:00-15:00
+        if hour < 9 or hour >= 15:
+            return
+    else:  # Sun-Thu 09:00-20:00
+        if hour < 9 or hour >= 20:
+            return
+
+    chat_ids = db.get_all_chat_ids()
+    for chat_id in chat_ids:
+        try:
+            overdue_items = db.get_overdue_items(chat_id)
+            for row in overdue_items:
+                item_id = row[0]
+                content = row[3]
+                item_type = row[2]
+                person = row[10] if len(row) > 10 else None
+                if person:
+                    msg = f"⚠️ *פריט שעבר מועד:*\n👤 *{person}* — {content}\n\nמה לעשות?"
+                else:
+                    emoji = {"task": "☐", "reminder": "⏰", "agenda": "👤"}.get(item_type, "•")
+                    msg = f"⚠️ *פריט שעבר מועד:*\n{emoji} {content}\n\nמה לעשות?"
+                try:
+                    suggestions = llm._fallback_suggestions()
+                    keyboard = handlers.reschedule_keyboard(item_id, suggestions)
+                    await app.bot.send_message(chat_id=chat_id, text=msg, parse_mode="Markdown", reply_markup=keyboard)
+                    db.mark_reminded(item_id)
+                except Exception as e:
+                    logger.error(f"Overdue notify error item {item_id}: {e}")
+        except Exception as e:
+            logger.error(f"Overdue check error for {chat_id}: {e}")
+
+
 def setup_scheduler(app: Application) -> AsyncIOScheduler:
     scheduler = AsyncIOScheduler(timezone=TIMEZONE)
 
@@ -99,6 +141,14 @@ def setup_scheduler(app: Application) -> AsyncIOScheduler:
         CronTrigger(minute="*", timezone=TIMEZONE),
         args=[app],
         id="reminder_check",
+        replace_existing=True,
+    )
+
+    scheduler.add_job(
+        check_overdue,
+        CronTrigger(hour="9,15", minute=30, timezone=TIMEZONE),
+        args=[app],
+        id="overdue_check",
         replace_existing=True,
     )
 
