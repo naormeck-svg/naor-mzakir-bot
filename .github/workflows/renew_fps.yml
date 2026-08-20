@@ -16,39 +16,60 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install Playwright + Chromium
+      - name: Install Xvfb and dependencies
         run: |
-          pip install playwright
+          sudo apt-get install -y xvfb
+          pip install playwright playwright-stealth
           playwright install chromium --with-deps
 
       - name: Renew fps.ms server
         env:
           FPS_EMAIL: ${{ secrets.FPS_EMAIL }}
           FPS_PASSWORD: ${{ secrets.FPS_PASSWORD }}
+          DISPLAY: ':99'
         run: |
+          Xvfb :99 -screen 0 1280x900x24 &
+          sleep 2
           python3 << 'PYEOF'
           import asyncio, os, sys
           from playwright.async_api import async_playwright
+          from playwright_stealth import stealth_async
 
           async def main():
               async with async_playwright() as p:
-                  browser = await p.chromium.launch(headless=True)
-                  page = await browser.new_page()
+                  browser = await p.chromium.launch(
+                      headless=False,
+                      args=['--disable-blink-features=AutomationControlled',
+                            '--no-sandbox', '--disable-dev-shm-usage']
+                  )
+                  context = await browser.new_context(
+                      viewport={'width': 1280, 'height': 900},
+                      user_agent='Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                  )
+                  page = await context.new_page()
+                  await stealth_async(page)
 
                   # Login
-                  print("Logging in to fps.ms...")
-                  await page.goto('https://panel.fps.ms/auth/login')
-                  await page.wait_for_selector('input[type="email"]', timeout=15000)
-                  await page.fill('input[type="email"]', os.environ['FPS_EMAIL'])
+                  print("Navigating to login page...")
+                  await page.goto('https://panel.fps.ms/auth/login', wait_until='domcontentloaded')
+                  await page.wait_for_timeout(4000)
+                  print(f"Page title: {await page.title()}")
+
+                  # Fill login form
+                  await page.fill('input[type="email"], input[name="user"], input[id*="email"]', os.environ['FPS_EMAIL'])
                   await page.fill('input[type="password"]', os.environ['FPS_PASSWORD'])
+                  print("Filled credentials, submitting...")
                   await page.click('button[type="submit"]')
+
+                  # Wait for redirect after login
                   await page.wait_for_url('**/server/**', timeout=30000)
                   print("Logged in!")
 
-                  # Navigate to server page (loads turnstile SDK)
+                  # Navigate to server page
                   await page.goto('https://panel.fps.ms/server/0cc613ed-1676-48cf-8840-941d9b6b39a8')
                   await page.wait_for_load_state('networkidle')
-                  await page.wait_for_function('window.turnstile !== undefined', timeout=15000)
+                  await page.wait_for_timeout(3000)
+                  await page.wait_for_function('window.turnstile !== undefined', timeout=20000)
 
                   # Render Turnstile widget and get token
                   print("Solving Turnstile...")
@@ -64,17 +85,14 @@ jobs:
                   })""")
                   print(f"Token obtained: {token[:30]}...")
 
-                  # Call renew endpoint with token (uses logged-in session cookies)
+                  # Call renew endpoint
                   result = await page.evaluate(
                       """async (tok) => {
                           const r = await fetch(
                               '/api/client/servers/0cc613ed-1676-48cf-8840-941d9b6b39a8/billing/renew',
                               {
                                   method: 'POST',
-                                  headers: {
-                                      'Accept': 'application/json',
-                                      'Content-Type': 'application/json'
-                                  },
+                                  headers: {'Accept': 'application/json', 'Content-Type': 'application/json'},
                                   body: JSON.stringify({'cf-turnstile-response': tok})
                               }
                           );
@@ -91,7 +109,7 @@ jobs:
                       print("Server renewed successfully!")
                   elif status == 429:
                       print("Rate limited / already renewed recently - OK")
-                  elif status == 422 or (status == 400 and 'eligible' in body.lower()):
+                  elif status == 400 and ('eligible' in body.lower() or 'hours' in body.lower()):
                       print("Server not yet eligible for renewal - OK")
                   else:
                       print(f"Unexpected response: {status}")
