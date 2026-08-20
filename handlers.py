@@ -726,7 +726,7 @@ async def handle_callback(update, context):
         await query.edit_message_text("✅ סומן כבוצע!", reply_markup=undo_kb)
     elif action == "undo":
         db.mark_undone(item_id)
-        await query.edit_message_text("↩️ המשימה הוחזרה לרשימה.", reply_markup=main_keyboard())
+        await query.edit_message_text("↩️ המשימה הוחזרה לרשימה.")
     elif action == "delete":
         keyboard = InlineKeyboardMarkup([
             [InlineKeyboardButton("🔴 כן, מחק", callback_data=f"delete_confirm:{item_id}"),
