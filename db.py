@@ -178,6 +178,12 @@ def mark_done(item_id: int):
     conn.commit()
 
 
+def mark_undone(item_id: int):
+    conn = get_conn()
+    conn.execute("UPDATE items SET done=0 WHERE id=?", (item_id,))
+    conn.commit()
+
+
 def snooze_item(item_id: int, hours: int = 1):
     """Snooze by N hours from now."""
     conn = get_conn()
