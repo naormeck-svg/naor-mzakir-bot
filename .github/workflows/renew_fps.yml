@@ -1,0 +1,103 @@
+name: Renew fps.ms Server Daily
+
+on:
+  schedule:
+    - cron: '0 9 * * *'  # Daily at 09:00 UTC (12:00 Israel time)
+  workflow_dispatch:
+
+jobs:
+  renew:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Playwright + Chromium
+        run: |
+          pip install playwright
+          playwright install chromium --with-deps
+
+      - name: Renew fps.ms server
+        env:
+          FPS_EMAIL: ${{ secrets.FPS_EMAIL }}
+          FPS_PASSWORD: ${{ secrets.FPS_PASSWORD }}
+        run: |
+          python3 << 'PYEOF'
+          import asyncio, os, sys
+          from playwright.async_api import async_playwright
+
+          async def main():
+              async with async_playwright() as p:
+                  browser = await p.chromium.launch(headless=True)
+                  page = await browser.new_page()
+
+                  # Login
+                  print("Logging in to fps.ms...")
+                  await page.goto('https://panel.fps.ms/auth/login')
+                  await page.wait_for_selector('input[type="email"]', timeout=15000)
+                  await page.fill('input[type="email"]', os.environ['FPS_EMAIL'])
+                  await page.fill('input[type="password"]', os.environ['FPS_PASSWORD'])
+                  await page.click('button[type="submit"]')
+                  await page.wait_for_url('**/server/**', timeout=30000)
+                  print("Logged in!")
+
+                  # Navigate to server page (loads turnstile SDK)
+                  await page.goto('https://panel.fps.ms/server/0cc613ed-1676-48cf-8840-941d9b6b39a8')
+                  await page.wait_for_load_state('networkidle')
+                  await page.wait_for_function('window.turnstile !== undefined', timeout=15000)
+
+                  # Render Turnstile widget and get token
+                  print("Solving Turnstile...")
+                  token = await page.evaluate("""() => new Promise((resolve, reject) => {
+                      const div = document.createElement('div');
+                      div.id = 'ts-renew';
+                      document.body.appendChild(div);
+                      window.turnstile.render('#ts-renew', {
+                          sitekey: '0x4AAAAAAB7AoTxwnnLxiHiL',
+                          callback: resolve,
+                          'error-callback': reject
+                      });
+                  })""")
+                  print(f"Token obtained: {token[:30]}...")
+
+                  # Call renew endpoint with token (uses logged-in session cookies)
+                  result = await page.evaluate(
+                      """async (tok) => {
+                          const r = await fetch(
+                              '/api/client/servers/0cc613ed-1676-48cf-8840-941d9b6b39a8/billing/renew',
+                              {
+                                  method: 'POST',
+                                  headers: {
+                                      'Accept': 'application/json',
+                                      'Content-Type': 'application/json'
+                                  },
+                                  body: JSON.stringify({'cf-turnstile-response': tok})
+                              }
+                          );
+                          return {status: r.status, body: await r.text()};
+                      }""",
+                      token
+                  )
+
+                  status = result['status']
+                  body = result['body']
+                  print(f"Renew response: {status} - {body[:300]}")
+
+                  if status in (200, 201, 204):
+                      print("Server renewed successfully!")
+                  elif status == 429:
+                      print("Rate limited / already renewed recently - OK")
+                  elif status == 422 or (status == 400 and 'eligible' in body.lower()):
+                      print("Server not yet eligible for renewal - OK")
+                  else:
+                      print(f"Unexpected response: {status}")
+                      sys.exit(1)
+
+                  await browser.close()
+
+          asyncio.run(main())
+          PYEOF
