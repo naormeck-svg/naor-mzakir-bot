@@ -40,7 +40,7 @@ Rules:
 - "task": something to do. Extract date/time if mentioned.
 - "reminder": something to remember at a specific time/date. Always has date or time. PRIORITY: if the message starts with or contains "תזכורת" or "תזכיר לי", ALWAYS classify as "reminder" — this overrides all other rules including infinitive detection.
 - "note": a thought, idea, or information to save. No action required.
-- "agenda": something the user wants to discuss with or ask a specific named person. Set person to their name, content to the topic only (without the person's name).
+- "agenda": something the user wants to discuss with or ask a specific named person. Extract date/time if mentioned (same rules as tasks). Set person to their name, content to the topic only (without the person's name).
 - "chat_people_query": user asks what they wanted to discuss with a specific person. Set person to their name.
 - "chat": casual conversation, question, or greeting — do NOT save, just respond.
 - Handle Hebrew-English code-switching naturally.
@@ -57,6 +57,7 @@ Rules:
   - "רוצה לדבר עם נווה על הפרויקט" → {{"type":"agenda","content":"הפרויקט","person":"נווה","date":null,"time":null,"recurring":null}}
   - "תזכיר לי לשאול את דוד על התקציב" → {{"type":"agenda","content":"התקציב","person":"דוד","date":null,"time":null,"recurring":null}}
   - "מה רציתי לדבר עם נווה?" → {{"type":"chat_people_query","content":"","person":"נווה","date":null,"time":null,"recurring":null}}
+  - "רוצה לדבר עם נווה ביום ראשון ב-8:30 על הפרויקט" → {{"type":"agenda","content":"הפרויקט","person":"נווה","date":"<next-sunday>","time":"08:30","recurring":null}}
 
 {date_context}
 """
