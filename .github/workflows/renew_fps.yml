@@ -16,10 +16,10 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install Xvfb and dependencies
+      - name: Install Xvfb and Playwright
         run: |
           sudo apt-get install -y xvfb
-          pip install playwright playwright-stealth
+          pip install playwright
           playwright install chromium --with-deps
 
       - name: Renew fps.ms server
@@ -33,21 +33,33 @@ jobs:
           python3 << 'PYEOF'
           import asyncio, os, sys
           from playwright.async_api import async_playwright
-          from playwright_stealth import stealth_async
 
           async def main():
               async with async_playwright() as p:
                   browser = await p.chromium.launch(
                       headless=False,
-                      args=['--disable-blink-features=AutomationControlled',
-                            '--no-sandbox', '--disable-dev-shm-usage']
+                      ignore_default_args=['--enable-automation'],
+                      args=[
+                          '--disable-blink-features=AutomationControlled',
+                          '--no-sandbox',
+                          '--disable-dev-shm-usage',
+                          '--disable-infobars',
+                          '--window-size=1280,900'
+                      ]
                   )
                   context = await browser.new_context(
                       viewport={'width': 1280, 'height': 900},
                       user_agent='Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
                   )
                   page = await context.new_page()
-                  await stealth_async(page)
+
+                  # Mask automation signals
+                  await page.add_init_script("""
+                      Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
+                      window.chrome = {runtime: {}};
+                      Object.defineProperty(navigator, 'plugins', {get: () => [1,2,3,4,5]});
+                      Object.defineProperty(navigator, 'languages', {get: () => ['en-US','en']});
+                  """)
 
                   # Login
                   print("Navigating to login page...")
@@ -56,12 +68,10 @@ jobs:
                   print(f"Page title: {await page.title()}")
 
                   # Fill login form
-                  await page.fill('input[type="email"], input[name="user"], input[id*="email"]', os.environ['FPS_EMAIL'])
+                  await page.fill('input[type="email"]', os.environ['FPS_EMAIL'])
                   await page.fill('input[type="password"]', os.environ['FPS_PASSWORD'])
                   print("Filled credentials, submitting...")
                   await page.click('button[type="submit"]')
-
-                  # Wait for redirect after login
                   await page.wait_for_url('**/server/**', timeout=30000)
                   print("Logged in!")
 
@@ -71,7 +81,7 @@ jobs:
                   await page.wait_for_timeout(3000)
                   await page.wait_for_function('window.turnstile !== undefined', timeout=20000)
 
-                  # Render Turnstile widget and get token
+                  # Render Turnstile and get token
                   print("Solving Turnstile...")
                   token = await page.evaluate("""() => new Promise((resolve, reject) => {
                       const div = document.createElement('div');
@@ -83,36 +93,30 @@ jobs:
                           'error-callback': reject
                       });
                   })""")
-                  print(f"Token obtained: {token[:30]}...")
+                  print(f"Token: {token[:30]}...")
 
-                  # Call renew endpoint
+                  # Call renew API
                   result = await page.evaluate(
                       """async (tok) => {
                           const r = await fetch(
                               '/api/client/servers/0cc613ed-1676-48cf-8840-941d9b6b39a8/billing/renew',
-                              {
-                                  method: 'POST',
-                                  headers: {'Accept': 'application/json', 'Content-Type': 'application/json'},
-                                  body: JSON.stringify({'cf-turnstile-response': tok})
-                              }
+                              {method:'POST', headers:{'Accept':'application/json','Content-Type':'application/json'},
+                               body: JSON.stringify({'cf-turnstile-response': tok})}
                           );
                           return {status: r.status, body: await r.text()};
-                      }""",
-                      token
-                  )
+                      }""", token)
 
-                  status = result['status']
-                  body = result['body']
-                  print(f"Renew response: {status} - {body[:300]}")
+                  status, body = result['status'], result['body']
+                  print(f"Renew: {status} - {body[:300]}")
 
                   if status in (200, 201, 204):
-                      print("Server renewed successfully!")
+                      print("Renewed!")
                   elif status == 429:
-                      print("Rate limited / already renewed recently - OK")
+                      print("Rate limited - OK")
                   elif status == 400 and ('eligible' in body.lower() or 'hours' in body.lower()):
-                      print("Server not yet eligible for renewal - OK")
+                      print("Not yet eligible - OK")
                   else:
-                      print(f"Unexpected response: {status}")
+                      print(f"Unexpected: {status}")
                       sys.exit(1)
 
                   await browser.close()
