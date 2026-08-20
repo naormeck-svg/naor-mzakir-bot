@@ -184,6 +184,18 @@ def get_tomorrow_items(chat_id: int):
         (chat_id, tomorrow)
     ).fetchall()
 
+def get_overdue_items(chat_id: int):
+    """Return items past their due date not yet reminded (or reminded >20h ago)."""
+    today = date.today().isoformat()
+    conn = get_conn()
+    return conn.execute(
+        """SELECT * FROM items WHERE chat_id=? AND done=0
+        AND due_date IS NOT NULL AND due_date < ?
+        AND (reminded_at IS NULL OR reminded_at < datetime('now', '-20 hours'))
+        ORDER BY due_date""",
+        (chat_id, today)
+    ).fetchall()
+
 
 def get_user_name(chat_id: int):
     conn = get_conn()
