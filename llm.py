@@ -38,7 +38,9 @@ Output format:
 
 Rules:
 - "task": something to do. Extract date/time if mentioned.
-- "reminder": something to remember at a specific time/date. Always has date or time. PRIORITY: if the message starts with or contains "תזכורת" or "תזכיר לי", ALWAYS classify as "reminder" — this overrides all other rules including infinitive detection.
+- "reminder": something to remember at a specific time/date. Always has date or time. PRIORITY rules:
+- If the message contains "תזכורת" or "תזכיר לי" WITHOUT a named person to talk/meet with → "reminder".
+- If the message contains "תזכיר לי לדבר עם", "תזכיר לי לפגוש את", "תזכיר לי להתקשר ל", or similar (remind me to interact WITH a named person) → "agenda" with date/time extracted. The person's name goes in "person", the topic in "content".
 - "note": a thought, idea, or information to save. No action required.
 - "agenda": something the user wants to discuss with or ask a specific named person. Extract date/time if mentioned (same rules as tasks). Set person to their name, content to the topic only (without the person's name).
 - "chat_people_query": user asks what they wanted to discuss with a specific person. Set person to their name.
@@ -55,7 +57,8 @@ Rules:
 - Hebrew correction: always return `content` with correct Hebrew spelling and natural grammar. Fix typos silently (e.g. "פרוייקט" → "פרויקט", "נווהה" → "נועה"). Expand abbreviations by context ("פרוג'" → "פרויקט" or "פרוגרמה" based on context). Do not over-formalize casual speech. For `person` names, use the most common correct spelling.
 - Examples:
   - "רוצה לדבר עם נווה על הפרויקט" → {{"type":"agenda","content":"הפרויקט","person":"נווה","date":null,"time":null,"recurring":null}}
-  - "תזכיר לי לשאול את דוד על התקציב" → {{"type":"agenda","content":"התקציב","person":"דוד","date":null,"time":null,"recurring":null}}
+  - "תזכיר לי לשאול את דוד על התקציב ביום שני ב-10:00" → {{"type":"agenda","content":"התקציב","person":"דוד","date":"<next-monday>","time":"10:00","recurring":null}}
+  - "תזכיר לי לקנות חלב מחר" → {{"type":"reminder","content":"לקנות חלב","person":null,"date":"<tomorrow>","time":null,"recurring":null}}
   - "מה רציתי לדבר עם נווה?" → {{"type":"chat_people_query","content":"","person":"נווה","date":null,"time":null,"recurring":null}}
   - "רוצה לדבר עם נווה ביום ראשון ב-8:30 על הפרויקט" → {{"type":"agenda","content":"הפרויקט","person":"נווה","date":"<next-sunday>","time":"08:30","recurring":null}}
 
