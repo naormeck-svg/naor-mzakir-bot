@@ -155,17 +155,17 @@ async def help_cmd(update, context):
         "/export — ייצוא ל-CSV\n"
         "/menu — תפריט כפתורים",
         parse_mode="Markdown",
-        reply_markup=main_keyboard(),
+        reply_markup=reply_keyboard(),
     )
 
 async def menu_cmd(update, context):
-    await update.effective_message.reply_text("תפריט:", reply_markup=main_keyboard())
+    await update.effective_message.reply_text("תפריט:", reply_markup=reply_keyboard())
 
 async def list_cmd(update, context):
     chat_id = update.effective_chat.id
     items = db.get_items(chat_id, type_="task", done=0)
     if not items:
-        await update.effective_message.reply_text("אין משימות פתוחות 🎉", reply_markup=main_keyboard())
+        await update.effective_message.reply_text("אין משימות פתוחות 🎉", reply_markup=reply_keyboard())
         return
     text = "📋 *משימות פתוחות:*\n\n"
     for row in items:
@@ -178,7 +178,7 @@ async def today_cmd(update, context):
     chat_id = update.effective_chat.id
     items = db.get_today_items(chat_id)
     if not items:
-        await update.effective_message.reply_text("אין פריטים להיום ✨", reply_markup=main_keyboard())
+        await update.effective_message.reply_text("אין פריטים להיום ✨", reply_markup=reply_keyboard())
         return
     text = f"📅 *היום — {_today().strftime('%d/%m/%Y')}:*\n\n"
     for row in items:
@@ -192,7 +192,7 @@ async def tomorrow_cmd(update, context):
     tomorrow = date.today() + timedelta(days=1)
     items = db.get_tomorrow_items(chat_id)
     if not items:
-        await update.effective_message.reply_text("אין פריטים למחר 🎉", reply_markup=main_keyboard())
+        await update.effective_message.reply_text("אין פריטים למחר 🎉", reply_markup=reply_keyboard())
         return
     text = f"📅 *מחר — {tomorrow.strftime('%d/%m/%Y')}:*\n\n"
     for row in items:
