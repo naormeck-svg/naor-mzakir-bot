@@ -122,18 +122,31 @@ def init_db():
             recurring TEXT,
             done INTEGER DEFAULT 0,
             created_at TEXT DEFAULT (datetime('now')),
-            reminded_at TEXT
+            reminded_at TEXT,
+            person TEXT
+        )
+    """)
+    # Migration: add person column if not present
+    try:
+        conn.execute("ALTER TABLE items ADD COLUMN person TEXT")
+    except Exception:
+        pass  # Column already exists
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS user_profiles (
+            chat_id INTEGER PRIMARY KEY,
+            name TEXT NOT NULL
         )
     """)
     conn.commit()
 
 
 def save_item(chat_id: int, type_: str, content: str,
-              due_date: str = None, due_time: str = None, recurring: str = None) -> int:
+              due_date: str = None, due_time: str = None, recurring: str = None,
+              person: str = None) -> int:
     conn = get_conn()
     cur = conn.execute(
-        "INSERT INTO items (chat_id, type, content, due_date, due_time, recurring) VALUES (?,?,?,?,?,?)",
-        (chat_id, type_, content, due_date, due_time, recurring)
+        "INSERT INTO items (chat_id, type, content, due_date, due_time, recurring, person) VALUES (?,?,?,?,?,?,?)",
+        (chat_id, type_, content, due_date, due_time, recurring, person)
     )
     conn.commit()
     return cur.lastrowid
@@ -172,6 +185,63 @@ def get_tomorrow_items(chat_id: int):
     ).fetchall()
 
 
+def get_user_name(chat_id: int):
+    conn = get_conn()
+    row = conn.execute("SELECT name FROM user_profiles WHERE chat_id=?", (chat_id,)).fetchone()
+    return row[0] if row else None
+
+
+def set_user_name(chat_id: int, name: str):
+    conn = get_conn()
+    conn.execute(
+        "INSERT INTO user_profiles (chat_id, name) VALUES (?,?) "
+        "ON CONFLICT(chat_id) DO UPDATE SET name=excluded.name",
+        (chat_id, name)
+    )
+    conn.commit()
+
+
+def get_people(chat_id: int):
+    """Return list of (person_name, count) for pending agenda items."""
+    conn = get_conn()
+    rows = conn.execute(
+        "SELECT person, COUNT(*) FROM items WHERE chat_id=? AND type='agenda' AND done=0 "
+        "AND person IS NOT NULL GROUP BY person ORDER BY person",
+        (chat_id,)
+    ).fetchall()
+    return [(row[0], row[1]) for row in rows]
+
+
+def get_items_by_person(chat_id: int, person: str):
+    conn = get_conn()
+    return conn.execute(
+        "SELECT * FROM items WHERE chat_id=? AND type='agenda' AND person=? AND done=0 ORDER BY created_at",
+        (chat_id, person)
+    ).fetchall()
+
+
+def find_similar_person(chat_id: int, name: str):
+    """Find an existing person with a similar name (for deduplication). Returns None if exact match or no similar."""
+    conn = get_conn()
+    rows = conn.execute(
+        "SELECT DISTINCT person FROM items WHERE chat_id=? AND type='agenda' AND done=0 AND person IS NOT NULL",
+        (chat_id,)
+    ).fetchall()
+    name_lower = name.strip().lower()
+    for row in rows:
+        existing = row[0]
+        if not existing:
+            continue
+        ex_lower = existing.strip().lower()
+        if ex_lower == name_lower:
+            return None  # Exact match â no dedup dialog needed
+        # Similar if first name matches (3+ chars)
+        if len(name_lower) >= 3 and len(ex_lower) >= 3:
+            if ex_lower.startswith(name_lower[:3]) or name_lower.startswith(ex_lower[:3]):
+                return existing
+    return None
+
+
 def mark_done(item_id: int):
     conn = get_conn()
     conn.execute("UPDATE items SET done=1 WHERE id=?", (item_id,))
@@ -182,6 +252,37 @@ def mark_undone(item_id: int):
     conn = get_conn()
     conn.execute("UPDATE items SET done=0 WHERE id=?", (item_id,))
     conn.commit()
+
+
+def delete_item(item_id: int):
+    conn = get_conn()
+    conn.execute("DELETE FROM items WHERE id=?", (item_id,))
+    conn.commit()
+
+
+def count_items_by_type(chat_id: int, type_: str = None) -> int:
+    conn = get_conn()
+    if type_ is None or type_ == "all":
+        row = conn.execute("SELECT COUNT(*) FROM items WHERE chat_id=?", (chat_id,)).fetchone()
+    else:
+        row = conn.execute(
+            "SELECT COUNT(*) FROM items WHERE chat_id=? AND type=?", (chat_id, type_)
+        ).fetchone()
+    return row[0] if row else 0
+
+
+def delete_items_by_type(chat_id: int, type_: str = None) -> int:
+    conn = get_conn()
+    if type_ is None or type_ == "all":
+        count = conn.execute("SELECT COUNT(*) FROM items WHERE chat_id=?", (chat_id,)).fetchone()[0] or 0
+        conn.execute("DELETE FROM items WHERE chat_id=?", (chat_id,))
+    else:
+        count = conn.execute(
+            "SELECT COUNT(*) FROM items WHERE chat_id=? AND type=?", (chat_id, type_)
+        ).fetchone()[0] or 0
+        conn.execute("DELETE FROM items WHERE chat_id=? AND type=?", (chat_id, type_))
+    conn.commit()
+    return count
 
 
 def snooze_item(item_id: int, hours: int = 1):
@@ -240,7 +341,7 @@ def handle_recurring(item_id: int):
     recurring = row[6]
     if not recurring:
         return
-    due_date_str = row[3]
+    due_date_str = row[4]
     if not due_date_str:
         return
     due_date_val = date.fromisoformat(due_date_str)
