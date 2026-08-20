@@ -182,9 +182,13 @@ async def today_cmd(update, context):
         return
     text = f"📅 *היום — {_today().strftime('%d/%m/%Y')}:*\n\n"
     for row in items:
-        emoji = {"task": "☐", "note": "📝", "reminder": "⏰"}.get(row[2], "•")
-        time_str = f" {row[5]}" if row[5] else ""
-        text += f"{emoji} {row[3]}{time_str}\n"
+        if row[2] == "agenda" and len(row) > 10 and row[10]:
+            time_str = f" ⏰{row[5]}" if row[5] else ""
+            text += f"👤 *{row[10]}* — {row[3]}{time_str}\n"
+        else:
+            emoji = {"task": "☐", "note": "📝", "reminder": "⏰"}.get(row[2], "•")
+            time_str = f" {row[5]}" if row[5] else ""
+            text += f"{emoji} {row[3]}{time_str}\n"
     await update.effective_message.reply_text(text, parse_mode="Markdown", reply_markup=task_list_keyboard(items))
 
 async def tomorrow_cmd(update, context):
@@ -196,9 +200,13 @@ async def tomorrow_cmd(update, context):
         return
     text = f"📅 *מחר — {tomorrow.strftime('%d/%m/%Y')}:*\n\n"
     for row in items:
-        emoji = {"task": "☐", "note": "📝", "reminder": "⏰"}.get(row[2], "•")
-        time_str = f" {row[5]}" if row[5] else ""
-        text += f"{emoji} {row[3]}{time_str}\n"
+        if row[2] == "agenda" and len(row) > 10 and row[10]:
+            time_str = f" ⏰{row[5]}" if row[5] else ""
+            text += f"👤 *{row[10]}* — {row[3]}{time_str}\n"
+        else:
+            emoji = {"task": "☐", "note": "📝", "reminder": "⏰"}.get(row[2], "•")
+            time_str = f" {row[5]}" if row[5] else ""
+            text += f"{emoji} {row[3]}{time_str}\n"
     await update.effective_message.reply_text(text, parse_mode="Markdown", reply_markup=task_list_keyboard(items))
 
 async def notes_cmd(update, context):
