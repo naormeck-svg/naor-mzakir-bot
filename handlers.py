@@ -52,7 +52,10 @@ def main_keyboard():
 
 def reply_keyboard():
     return ReplyKeyboardMarkup(
-        [[KeyboardButton("👥 אנשים"), KeyboardButton("📋 משימות"), KeyboardButton("📅 היום")]],
+        [
+            [KeyboardButton("📅 היום"), KeyboardButton("📅 מחר")],
+            [KeyboardButton("📋 משימות"), KeyboardButton("👥 אנשים")],
+        ],
         resize_keyboard=True,
         is_persistent=True,
     )
